@@ -370,9 +370,9 @@ impl App {
                     self.screen = Screen::VaultList;
                     self.set_status(&format!("Vault '{name}' created"));
                 }
-                TaskResult::CreateVault {
-                    result: Err(e), ..
-                } => self.set_error(&format!("Failed to create vault: {e}")),
+                TaskResult::CreateVault { result: Err(e), .. } => {
+                    self.set_error(&format!("Failed to create vault: {e}"))
+                }
                 _ => {}
             },
             TaskKind::SaveEntryAdd | TaskKind::SaveEntryEdit | TaskKind::SaveEntryDelete => {
@@ -405,7 +405,7 @@ impl App {
         use ratatui::{
             layout::{Alignment, Constraint, Direction, Layout},
             style::{Color, Modifier, Style},
-            widgets::{BorderType, Block, Borders, Paragraph},
+            widgets::{Block, BorderType, Borders, Paragraph},
         };
 
         let Some(task) = &self.pending else { return };
@@ -441,7 +441,8 @@ impl App {
         f.render_widget(note, chunks[2]);
 
         let modal = Block::default()
-            .borders(Borders::ALL).border_type(BorderType::Rounded)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .title("Working")
             .border_style(Style::default().fg(Color::Blue));
         f.render_widget(modal, area);
@@ -450,7 +451,8 @@ impl App {
     /// Dismisses status notifications that have outlived `STATUS_LIFETIME`.
     fn expire_status(&mut self) {
         let expired = |n: &Option<StatusNotice>| {
-            n.as_ref().is_some_and(|s| s.at.elapsed() >= STATUS_LIFETIME)
+            n.as_ref()
+                .is_some_and(|s| s.at.elapsed() >= STATUS_LIFETIME)
         };
         if expired(&self.status_message) {
             self.status_message = None;
@@ -1007,9 +1009,7 @@ impl App {
         }
 
         self.copy_from_entry(
-            |entry| {
-                copy_secret_to_clipboard(entry.password().expose_secret().as_str())
-            },
+            |entry| copy_secret_to_clipboard(entry.password().expose_secret().as_str()),
             "Password copied to clipboard (15s)",
         );
         AppSignal::Continue

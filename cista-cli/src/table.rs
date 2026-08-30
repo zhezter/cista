@@ -1,9 +1,9 @@
 //! Shared table rendering for lists of entries.
 
+use cista_core::Entry;
 use comfy_table::Cell;
 use comfy_table::ContentArrangement;
 use comfy_table::Table;
-use cista_core::Entry;
 
 /// Renders `entries` as a table with Name / Username / URL columns.
 pub fn render_entries<'a>(entries: impl IntoIterator<Item = &'a Entry>) -> String {

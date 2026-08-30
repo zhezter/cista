@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{BorderType, Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
 
@@ -31,7 +31,11 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
         FormMode::Edit => "Edit Entry",
     };
     let header = Paragraph::new(mode)
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(header, chunks[0]);
@@ -41,7 +45,11 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
         ("Service name", &app.form_fields.name, 1),
         ("Username", &app.form_fields.username, 2),
         ("Password", &mask_password(&app.form_fields.password), 3),
-        ("Confirm password", &mask_password(&app.form_fields.password_confirm), 4),
+        (
+            "Confirm password",
+            &mask_password(&app.form_fields.password_confirm),
+            4,
+        ),
         ("URL", &app.form_fields.url, 5),
         ("Notes", &app.form_fields.notes, 6),
     ];
@@ -49,7 +57,9 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     for (label, value, idx) in fields {
         let is_active = app.form_field_idx == idx - 1;
         let style = if is_active {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
@@ -59,14 +69,13 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
             Style::default().fg(Color::DarkGray)
         };
 
-        let input = Paragraph::new(value.as_str())
-            .style(style)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL).border_type(BorderType::Rounded)
-                    .title(format!(" {} ", label))
-                    .border_style(border_style),
-            );
+        let input = Paragraph::new(value.as_str()).style(style).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(format!(" {} ", label))
+                .border_style(border_style),
+        );
         f.render_widget(input, chunks[idx]);
     }
 
@@ -82,10 +91,7 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     // Cursor for the active field.
     if let Some((_, value, idx)) = fields.get(app.form_field_idx) {
         let field_chunk = chunks[*idx];
-        f.set_cursor_position((
-            field_chunk.x + 1 + cursor_offset(value),
-            field_chunk.y + 1,
-        ));
+        f.set_cursor_position((field_chunk.x + 1 + cursor_offset(value), field_chunk.y + 1));
     }
 }
 

@@ -2,7 +2,9 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{BorderType, Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{
+        Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    },
     Frame,
 };
 
@@ -21,7 +23,11 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
         .split(area);
 
     let header = Paragraph::new("Help - Keybindings")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(header, chunks[0]);
@@ -39,7 +45,11 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
 
     let help = Paragraph::new(lines)
         .style(Style::default().fg(Color::White))
-        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
         .scroll((app.help_scroll, 0))
         .alignment(Alignment::Left);
     f.render_widget(help, chunks[1]);
@@ -54,8 +64,7 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
         let scrollbar_pos = if max_scroll <= 1 {
             scroll
         } else {
-            (scroll as f64 * (total.saturating_sub(1) as f64) / max_scroll as f64)
-                .round() as usize
+            (scroll as f64 * (total.saturating_sub(1) as f64) / max_scroll as f64).round() as usize
         }
         .min(total.saturating_sub(1));
 
@@ -80,7 +89,9 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
 fn section(title: &'static str) -> Line<'static> {
     Line::from(Span::styled(
         title,
-        Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Yellow)
+            .add_modifier(Modifier::BOLD),
     ))
 }
 

@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{BorderType, Block, Borders, Cell, Paragraph, Row, Table, TableState},
+    widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState},
     Frame,
 };
 
@@ -22,7 +22,11 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
 
     // Header
     let header = Paragraph::new("Generate Password")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(header, chunks[0]);
@@ -80,7 +84,8 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
         .column_spacing(2)
         .block(
             Block::default()
-                .borders(Borders::ALL).border_type(BorderType::Rounded)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .title(" Options ")
                 .border_style(Style::default().fg(Color::Blue)),
         );
@@ -92,11 +97,16 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
     // Generated result
     if let Some(pwd) = &app.gen_result {
         let result = Paragraph::new(pwd.as_str())
-            .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center)
             .block(
                 Block::default()
-                    .borders(Borders::ALL).border_type(BorderType::Rounded)
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
                     .title(" Generated ")
                     .border_style(Style::default().fg(Color::DarkGray)),
             );

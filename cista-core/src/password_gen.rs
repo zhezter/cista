@@ -106,8 +106,17 @@ pub fn generate_password(policy: &PasswordPolicy) -> CoreResult<String> {
 /// Returns a list of human-readable warnings (empty if the password looks ok).
 pub fn password_feedback(password: &str) -> Vec<&'static str> {
     const COMMON: &[&str] = &[
-        "123456", "password", "123456789", "qwerty", "abc123", "111111", "12345678", "letmein",
-        "iloveyou", "admin", "welcome",
+        "123456",
+        "password",
+        "123456789",
+        "qwerty",
+        "abc123",
+        "111111",
+        "12345678",
+        "letmein",
+        "iloveyou",
+        "admin",
+        "welcome",
     ];
 
     let mut warnings: Vec<&'static str> = Vec::new();

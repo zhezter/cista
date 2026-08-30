@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver};
 use std::time::Instant;
 
-use secrecy::{ExposeSecret, Secret};
 use cista_core::SecretString;
+use secrecy::{ExposeSecret, Secret};
 
 use cista_core::storage::{load_vault_from_path, save_new_vault};
 use cista_core::Vault;
@@ -83,8 +83,12 @@ pub fn spawn_create_vault(
 ) -> Receiver<TaskResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let result = save_new_vault(&path, &Vault::new(), password.expose_secret().as_str().as_bytes())
-            .map_err(|e| e.to_string());
+        let result = save_new_vault(
+            &path,
+            &Vault::new(),
+            password.expose_secret().as_str().as_bytes(),
+        )
+        .map_err(|e| e.to_string());
         let _ = tx.send(TaskResult::CreateVault { name, result });
     });
     rx
@@ -97,9 +101,7 @@ pub fn spawn_save_vault(
 ) -> Receiver<TaskResult> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let result = vault
-            .save(&path, &password)
-            .map_err(|e| e.to_string());
+        let result = vault.save(&path, &password).map_err(|e| e.to_string());
         let _ = tx.send(TaskResult::SaveVault { result });
     });
     rx

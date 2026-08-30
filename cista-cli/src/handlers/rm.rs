@@ -32,6 +32,9 @@ pub fn apply_rm(
     let removed = vault.remove_by_id(id)?;
     vault.save(path, password)?;
 
-    println!("{}", ui::error(format!("Removed entry: {}", removed.name())));
+    println!(
+        "{}",
+        ui::error(format!("Removed entry: {}", removed.name()))
+    );
     Ok(())
 }

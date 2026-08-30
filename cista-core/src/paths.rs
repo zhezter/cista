@@ -6,9 +6,11 @@ use crate::{CoreError, CoreResult};
 
 /// `~/.config/cista`
 pub fn config_dir() -> CoreResult<PathBuf> {
-    dirs::config_dir()
-        .map(|p| p.join("cista"))
-        .ok_or_else(|| CoreError::Io(std::io::Error::other("could not determine config directory")))
+    dirs::config_dir().map(|p| p.join("cista")).ok_or_else(|| {
+        CoreError::Io(std::io::Error::other(
+            "could not determine config directory",
+        ))
+    })
 }
 
 /// `~/.local/share/cista`

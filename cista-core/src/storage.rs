@@ -35,10 +35,7 @@ pub fn save_vault_to_path(path: &Path, vault: &Vault, password: &[u8]) -> CoreRe
 /// Backs up the current vault file to a timestamped copy under
 /// `~/.local/share/cista/backups/<name>/` before overwriting.
 fn backup_existing(path: &Path) -> CoreResult<()> {
-    let name = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("vault");
+    let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("vault");
     let backup_dir = crate::paths::backups_dir()?.join(name);
     std::fs::create_dir_all(&backup_dir)?;
 

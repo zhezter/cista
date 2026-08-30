@@ -47,9 +47,9 @@ pub fn apply_add(
             Secret::new(SecretString::from(generated))
         } else {
             let entered = Secret::new(SecretString::from(input.read_password("Entry password: ")?));
-            for warning in cista_core::password_gen::password_feedback(
-                entered.expose_secret().as_str(),
-            ) {
+            for warning in
+                cista_core::password_gen::password_feedback(entered.expose_secret().as_str())
+            {
                 eprintln!("{}: {}", ui::warn("weak password"), warning);
             }
             entered

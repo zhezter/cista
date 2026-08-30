@@ -58,9 +58,7 @@ mod tests {
         vault.add_entry(entry);
 
         // Tamper with a byte in the ciphertext region of the sealed data.
-        let mut sealed = vault
-            .seal(b"master password")
-            .expect("seal should succeed");
+        let mut sealed = vault.seal(b"master password").expect("seal should succeed");
         let last = sealed.len() - 1;
         sealed[last] ^= 0xFF;
 

@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{BorderType, Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
 
@@ -30,11 +30,18 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     let header_text = if app.in_search {
         format!("🔍 Search: {}_", app.search_query)
     } else {
-        format!("{}  🔓  [/]Search  [a]Add  [g]Generate  [L]Lock", vault_name)
+        format!(
+            "{}  🔓  [/]Search  [a]Add  [g]Generate  [L]Lock",
+            vault_name
+        )
     };
 
     let header = Paragraph::new(header_text)
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Left)
         .block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(header, chunks[0]);
@@ -51,7 +58,10 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
             let idx = start + i;
             let selected = idx == app.entry_list_selected;
             let style = if selected {
-                Style::default().bg(Color::Blue).fg(Color::White).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .bg(Color::Blue)
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
@@ -77,7 +87,12 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
         })
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title("Entries (0)"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Entries (0)"),
+        );
         f.render_widget(empty, chunks[1]);
     } else {
         let total_pages = app.entries.len().div_ceil(app.per_page);
@@ -90,7 +105,8 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
         let list = List::new(items)
             .block(
                 Block::default()
-                    .borders(Borders::ALL).border_type(BorderType::Rounded)
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
                     .title(title),
             )
             .highlight_style(

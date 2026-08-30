@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{BorderType, Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
 use secrecy::ExposeSecret;
@@ -73,7 +73,12 @@ pub fn draw_entry_detail(f: &mut Frame, app: &mut App) {
 
             let detail = Paragraph::new(content)
                 .style(Style::default().fg(Color::White))
-                .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title("Details"))
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded)
+                        .title("Details"),
+                )
                 .alignment(Alignment::Left);
             f.render_widget(detail, chunks[1]);
         }

@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{BorderType, Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
 
@@ -24,7 +24,11 @@ pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
 
     // Header
     let header = Paragraph::new("New Vault")
-        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(header, chunks[0]);
@@ -64,7 +68,8 @@ pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
             }))
             .block(
                 Block::default()
-                    .borders(Borders::ALL).border_type(BorderType::Rounded)
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
                     .title(format!(" {label} "))
                     .title_style(Style::default().fg(fg))
                     .border_style(Style::default().fg(border)),
@@ -76,10 +81,7 @@ pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
         // `cursor_offset` counts wide glyphs (like the multi-byte bullet) as a
         // single terminal cell, keeping the column right.
         if is_active {
-            f.set_cursor_position((
-                chunks[idx].x + 1 + cursor_offset(value),
-                chunks[idx].y + 1,
-            ));
+            f.set_cursor_position((chunks[idx].x + 1 + cursor_offset(value), chunks[idx].y + 1));
         }
     }
 

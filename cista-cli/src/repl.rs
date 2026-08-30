@@ -10,9 +10,9 @@ use rustyline::completion::Completer;
 use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
-use rustyline::validate::Validator;
-use rustyline::line_buffer::LineBuffer;
 use rustyline::history::DefaultHistory;
+use rustyline::line_buffer::LineBuffer;
+use rustyline::validate::Validator;
 use rustyline::{Changeset, Context, Editor, Helper};
 use secrecy::Secret;
 use std::cell::RefCell;
@@ -105,7 +105,9 @@ fn parse_command(line: &str) -> ReplCommand {
         "rm" | "remove" | "delete" => ReplCommand::Rm(rest.join(" ")),
         "passwd" | "password" => ReplCommand::Passwd,
         "generate" | "gen" => {
-            let default_len = Config::load().map(|c| c.default_generate_length).unwrap_or(20);
+            let default_len = Config::load()
+                .map(|c| c.default_generate_length)
+                .unwrap_or(20);
             let mut length = default_len;
             let mut no_symbols = false;
             let mut exclude_ambiguous = false;
@@ -143,8 +145,8 @@ fn print_help() {
 }
 
 const COMMANDS: &[&str] = &[
-    "add", "get", "list", "search", "edit", "rm", "passwd", "generate", "lock", "unlock",
-    "help", "exit",
+    "add", "get", "list", "search", "edit", "rm", "passwd", "generate", "lock", "unlock", "help",
+    "exit",
 ];
 
 /// Commands whose second argument is an entry name, completed from the vault.
@@ -204,13 +206,7 @@ impl Completer for ReplCompleter {
         Ok((start, Vec::new()))
     }
 
-    fn update(
-        &self,
-        line: &mut LineBuffer,
-        start: usize,
-        elected: &str,
-        cl: &mut Changeset,
-    ) {
+    fn update(&self, line: &mut LineBuffer, start: usize, elected: &str, cl: &mut Changeset) {
         line.replace(start..line.pos(), elected, cl);
     }
 }
@@ -486,9 +482,7 @@ mod tests {
 
     fn completer_with(names: &[&str]) -> ReplCompleter {
         ReplCompleter {
-            entry_names: Rc::new(RefCell::new(
-                names.iter().map(|s| s.to_string()).collect(),
-            )),
+            entry_names: Rc::new(RefCell::new(names.iter().map(|s| s.to_string()).collect())),
         }
     }
 

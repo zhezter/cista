@@ -34,8 +34,9 @@ fn main() {
         let keybindings = KeyBindings::default();
         let mut app = App::new(keybindings);
 
-        let res =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_app(&mut terminal, &mut app)));
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            run_app(&mut terminal, &mut app)
+        }));
 
         disable_raw_mode()?;
         execute!(
@@ -111,8 +112,7 @@ fn run_app<B: ratatui::backend::Backend>(terminal: &mut Terminal<B>, app: &mut A
 
         match event::read() {
             Ok(Event::Key(key)) => {
-                if key.kind == KeyEventKind::Press
-                    && matches!(app.handle_key(key), AppSignal::Quit)
+                if key.kind == KeyEventKind::Press && matches!(app.handle_key(key), AppSignal::Quit)
                 {
                     break;
                 }

@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{BorderType, Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
 
@@ -22,7 +22,11 @@ pub fn draw_confirm(f: &mut Frame, app: &mut App) {
 
     // Title
     let title = Paragraph::new("Confirm")
-        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+        .style(
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )
         .alignment(Alignment::Center);
     f.render_widget(title, chunks[0]);
 
@@ -30,7 +34,11 @@ pub fn draw_confirm(f: &mut Frame, app: &mut App) {
     let msg = Paragraph::new(app.confirm_message.as_str())
         .style(Style::default().fg(Color::White))
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        );
     f.render_widget(msg, chunks[1]);
 
     // Buttons

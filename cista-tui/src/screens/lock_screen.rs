@@ -27,9 +27,10 @@ pub fn draw_lock_screen(f: &mut Frame, _app: &mut App) {
     f.render_widget(title, chunks[0]);
 
     // Message
-    let msg = Paragraph::new("Session locked due to inactivity.\nPress Enter to unlock or 'q' to quit.")
-        .style(Style::default().fg(Color::White))
-        .alignment(Alignment::Center);
+    let msg =
+        Paragraph::new("Session locked due to inactivity.\nPress Enter to unlock or 'q' to quit.")
+            .style(Style::default().fg(Color::White))
+            .alignment(Alignment::Center);
     f.render_widget(msg, chunks[1]);
 
     // Unlock prompt

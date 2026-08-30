@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Style},
-    widgets::{BorderType, Block, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
 
@@ -9,10 +9,7 @@ pub fn draw_status(f: &mut Frame, msg: &str, is_error: bool) {
     let area = f.area();
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Min(0),
-            Constraint::Length(3),
-        ])
+        .constraints([Constraint::Min(0), Constraint::Length(3)])
         .split(area);
 
     let style = if is_error {
@@ -24,6 +21,11 @@ pub fn draw_status(f: &mut Frame, msg: &str, is_error: bool) {
     let status = Paragraph::new(msg)
         .style(style)
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).title(if is_error { " Error " } else { " Status " }));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(if is_error { " Error " } else { " Status " }),
+        );
     f.render_widget(status, chunks[1]);
 }

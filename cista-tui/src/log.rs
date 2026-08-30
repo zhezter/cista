@@ -20,11 +20,7 @@ pub fn init() {
         if let Some(parent) = p.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(p)
-            .ok()
+        OpenOptions::new().create(true).append(true).open(p).ok()
     });
     *LOG.lock().expect("log mutex poisoned") = file;
 }

@@ -10,12 +10,12 @@ pub fn apply_passwd(
     path: &Path,
     input: &mut dyn InputSource,
 ) -> anyhow::Result<Secret<SecretString>> {
-    let new_password = Secret::new(SecretString::from(input.read_password(
-        "New master password: ",
-    )?));
-    let confirm = Secret::new(SecretString::from(input.read_password(
-        "Confirm new master password: ",
-    )?));
+    let new_password = Secret::new(SecretString::from(
+        input.read_password("New master password: ")?,
+    ));
+    let confirm = Secret::new(SecretString::from(
+        input.read_password("Confirm new master password: ")?,
+    ));
 
     if new_password.expose_secret().as_str() != confirm.expose_secret().as_str() {
         anyhow::bail!("Passwords do not match");
