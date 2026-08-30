@@ -1,0 +1,20 @@
+[package]
+name = "cista-tui"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal UI for Cista password manager"
+license = "MIT"
+
+[dependencies]
+cista-core = { path = "../cista-core" }
+ratatui = "0.28"
+crossterm = { version = "0.28", features = ["event-stream"] }
+anyhow = "1.0"
+secrecy = "0.8"
+zeroize = "1.8"
+time = "0.3"
+dirs = "5.0"
+serde = { version = "1.0", features = ["derive"] }
+arboard = "3"
+uuid = { version = "1", features = ["v4", "serde"] }
+unicode-width = "0.1"

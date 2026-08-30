@@ -1,0 +1,22 @@
+[package]
+name = "cista-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "cista"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+anyhow = "1"
+cista-core = { path = "../cista-core" }
+rpassword = "7"
+secrecy = { version = "0.8", features = ["serde"] }
+arboard = "*"
+colored = "3"
+rustyline = "14"
+libc = "0.2"
+uuid = { version = "1", features = ["v4"] }
+comfy-table = "7"

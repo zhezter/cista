@@ -1,0 +1,23 @@
+mod add;
+mod edit;
+mod generate;
+mod get;
+mod init;
+mod list;
+mod list_vaults;
+mod lookup;
+mod passwd;
+mod rm;
+mod search;
+
+pub use add::apply_add;
+pub use edit::apply_edit;
+pub use generate::handle_generate;
+pub use get::apply_get;
+pub use init::handle_init;
+pub use list::apply_list;
+pub use list_vaults::handle_list_vaults;
+pub use lookup::resolve_entry_id;
+pub use passwd::apply_passwd;
+pub use rm::apply_rm;
+pub use search::apply_search;
