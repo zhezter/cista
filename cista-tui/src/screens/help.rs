@@ -124,6 +124,7 @@ fn build_help_lines() -> Vec<Line<'static>> {
         row("  PgUp/PgDn   Page up/down"),
         row("  Home/End    First/last"),
         row("  /           Search (type to filter)"),
+        row("  o           Sort: Name A-Z/Z-A, Modified, Created"),
         row("  a           Add entry"),
         row("  d           Delete entry"),
         row("  Enter       View entry"),

@@ -5,6 +5,7 @@ mod error;
 pub mod cipher;
 pub mod config;
 pub mod format;
+pub mod health;
 pub mod kdf;
 pub mod model;
 pub mod password_gen;

@@ -1,4 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::style::Color;
 use ratatui::Frame;
 use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
@@ -75,6 +76,7 @@ pub struct App {
     pub per_page: usize,
     pub search_query: String,
     pub in_search: bool,
+    pub sort_mode: SortMode,
 
     // Entry detail
     pub detail_entry_idx: Option<usize>,
@@ -126,6 +128,53 @@ pub struct EntryRow {
     pub name: String,
     pub username: Option<String>,
     pub url: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: time::OffsetDateTime,
+    pub updated_at: time::OffsetDateTime,
+    pub health: cista_core::health::Health,
+}
+
+/// How the entry list is ordered. Pressing `o` in the list cycles through
+/// these modes (forward through the paired direction toggles).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortMode {
+    NameAsc,
+    NameDesc,
+    UpdatedDesc,
+    UpdatedAsc,
+    CreatedDesc,
+    CreatedAsc,
+}
+
+impl SortMode {
+    /// Human-readable label shown in the table title / footer.
+    pub fn label(self) -> &'static str {
+        match self {
+            SortMode::NameAsc => "Name ↑",
+            SortMode::NameDesc => "Name ↓",
+            SortMode::UpdatedDesc => "Modified ↓",
+            SortMode::UpdatedAsc => "Modified ↑",
+            SortMode::CreatedDesc => "Created ↓",
+            SortMode::CreatedAsc => "Created ↑",
+        }
+    }
+
+    /// Next mode in the cycling order.
+    pub fn next(self) -> Self {
+        match self {
+            SortMode::NameAsc => SortMode::NameDesc,
+            SortMode::NameDesc => SortMode::UpdatedDesc,
+            SortMode::UpdatedDesc => SortMode::UpdatedAsc,
+            SortMode::UpdatedAsc => SortMode::CreatedDesc,
+            SortMode::CreatedDesc => SortMode::CreatedAsc,
+            SortMode::CreatedAsc => SortMode::NameAsc,
+        }
+    }
+}
+
+/// Case-insensitive name comparison for sorting.
+fn name_cmp(a: &EntryRow, b: &EntryRow) -> std::cmp::Ordering {
+    a.name.to_lowercase().cmp(&b.name.to_lowercase())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,6 +288,7 @@ impl App {
             per_page: 20,
             search_query: String::new(),
             in_search: false,
+            sort_mode: SortMode::NameAsc,
             detail_entry_idx: None,
             show_password: false,
             form_mode: FormMode::Add,
@@ -579,6 +629,7 @@ impl App {
             Action::Reveal => self.handle_reveal(),
             Action::NewVault => self.handle_new_vault(),
             Action::Reroll => self.handle_reroll(),
+            Action::Sort => self.handle_sort(),
             Action::TabNext => self.handle_tab_next(),
             Action::TabPrev => self.handle_tab_prev(),
             Action::Save => self.handle_save(),
@@ -702,6 +753,18 @@ impl App {
         AppSignal::Continue
     }
 
+    /// Cycle the entry list sort mode ('o'). Resets to the first page so the
+    /// newly ordered list is seen from its start.
+    fn handle_sort(&mut self) -> AppSignal {
+        if self.screen == Screen::EntryList {
+            self.sort_mode = self.sort_mode.next();
+            let label = self.sort_mode.label();
+            self.recompute_filtered_entries();
+            self.set_status(&format!("Sorted by {label}"));
+        }
+        AppSignal::Continue
+    }
+
     fn toggle_gen_option(&mut self, option: GenOption) {
         let p = &mut self.gen_policy;
         match option {
@@ -819,12 +882,31 @@ impl App {
     fn load_entries(&mut self) {
         self.all_entries.clear();
         if let Some(vault) = &self.vault {
-            for entry in vault.entries() {
+            let now = time::OffsetDateTime::now_utc();
+            // First pass: gather (password, age_days) pairs so the health check
+            // can count reuse across the whole vault before we build rows.
+            let pairs: Vec<(&str, i64)> = vault
+                .entries()
+                .iter()
+                .map(|e| {
+                    let age_days = (now - e.updated_at()).whole_days().max(0);
+                    (e.password().expose_secret().as_str(), age_days)
+                })
+                .collect();
+            let healths = cista_core::health::assess_all(pairs);
+
+            for (i, entry) in vault.entries().iter().enumerate() {
                 self.all_entries.push(EntryRow {
                     id: entry.id(),
                     name: entry.name().to_string(),
                     username: entry.username().map(|s| s.to_string()),
                     url: entry.url().map(|s| s.to_string()),
+                    notes: entry
+                        .notes()
+                        .map(|n| n.expose_secret().as_str().to_string()),
+                    created_at: entry.created_at(),
+                    updated_at: entry.updated_at(),
+                    health: healths[i].clone(),
                 });
             }
         }
@@ -832,10 +914,10 @@ impl App {
     }
 
     /// Rebuilds `entries` from the pristine `all_entries` list, applying the
-    /// current search filter. Never mutates `all_entries`, so clearing or
-    /// shortening the query restores every entry.
+    /// current search filter and sort order. Never mutates `all_entries`, so
+    /// clearing or shortening the query restores every entry.
     fn recompute_filtered_entries(&mut self) {
-        self.entries = if self.search_query.is_empty() {
+        let mut entries: Vec<EntryRow> = if self.search_query.is_empty() {
             self.all_entries.clone()
         } else {
             let q = self.search_query.to_lowercase();
@@ -851,10 +933,25 @@ impl App {
                             .as_deref()
                             .map(|u| u.to_lowercase().contains(&q))
                             .unwrap_or(false)
+                        || e.notes
+                            .as_deref()
+                            .map(|n| n.to_lowercase().contains(&q))
+                            .unwrap_or(false)
                 })
                 .cloned()
                 .collect()
         };
+
+        entries.sort_by(|a, b| match self.sort_mode {
+            SortMode::NameAsc => name_cmp(a, b),
+            SortMode::NameDesc => name_cmp(b, a),
+            SortMode::UpdatedDesc => b.updated_at.cmp(&a.updated_at),
+            SortMode::UpdatedAsc => a.updated_at.cmp(&b.updated_at),
+            SortMode::CreatedDesc => b.created_at.cmp(&a.created_at),
+            SortMode::CreatedAsc => a.created_at.cmp(&b.created_at),
+        });
+
+        self.entries = entries;
         self.entry_list_selected = 0;
         self.entry_list_page = 0;
     }
@@ -864,6 +961,44 @@ impl App {
             None
         } else {
             Some(self.entry_list_selected.min(self.entries.len() - 1))
+        }
+    }
+
+    /// Health summary across all entries, e.g. `2 weak · 1 reused`. Empty
+    /// beyond a healthy vault, so the header stays tidy.
+    pub fn health_summary(&self) -> Option<String> {
+        let mut weak = 0usize;
+        let mut reused = 0usize;
+        for e in &self.all_entries {
+            if e.health.score < 60 {
+                weak += 1;
+            }
+            if e.health.used_in > 1 {
+                reused += 1;
+            }
+        }
+        if weak == 0 && reused == 0 {
+            return None;
+        }
+        let mut parts = Vec::new();
+        if weak > 0 {
+            parts.push(format!("{weak} weak"));
+        }
+        if reused > 0 {
+            parts.push(format!("{reused} reused"));
+        }
+        Some(parts.join(" · "))
+    }
+
+    /// Color for a health score: red for weak, yellow for middling, green for
+    /// strong.
+    pub fn health_color(score: u8) -> Color {
+        if score < 60 {
+            Color::Red
+        } else if score < 85 {
+            Color::Yellow
+        } else {
+            Color::Green
         }
     }
 

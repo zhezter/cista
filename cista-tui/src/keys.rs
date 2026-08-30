@@ -28,6 +28,7 @@ pub struct KeyBindings {
     pub left: KeyBinding,
     pub right: KeyBinding,
     pub reroll: KeyBinding,
+    pub sort: KeyBinding,
     pub tab_next: KeyBinding,
     pub tab_prev: KeyBinding,
     pub save: KeyBinding,
@@ -76,6 +77,7 @@ impl Default for KeyBindings {
             left: kb(Left, KeyModifiers::NONE),
             right: kb(Right, KeyModifiers::NONE),
             reroll: kb(Char('r'), KeyModifiers::NONE),
+            sort: kb(Char('o'), KeyModifiers::NONE),
             tab_next: kb(Tab, KeyModifiers::NONE),
             tab_prev: kb(BackTab, KeyModifiers::NONE),
             save: kb(Char('s'), KeyModifiers::CONTROL),
@@ -131,6 +133,7 @@ const BOUND: &[Binding] = &[
     (Action::Reveal, |b| &b.reveal),
     (Action::NewVault, |b| &b.new_vault),
     (Action::Reroll, |b| &b.reroll),
+    (Action::Sort, |b| &b.sort),
 ];
 
 impl ActionMapper {
@@ -189,6 +192,7 @@ pub enum Action {
     Reveal,
     NewVault,
     Reroll,
+    Sort,
     TabNext,
     TabPrev,
     Save,

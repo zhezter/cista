@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, BorderType, Borders, Paragraph},
+    widgets::{Block, BorderType, Borders, Cell, Paragraph, Row, Table, TableState},
     Frame,
 };
 
@@ -30,9 +30,15 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     let header_text = if app.in_search {
         format!("🔍 Search: {}_", app.search_query)
     } else {
+        let health = app
+            .health_summary()
+            .map(|h| format!("  Health: {h}   "))
+            .unwrap_or_default();
         format!(
-            "{}  🔓  [/]Search  [a]Add  [g]Generate  [L]Lock",
-            vault_name
+            "{}  🔓  {}[o]Sort: {}  [L]Lock",
+            vault_name,
+            health,
+            app.sort_mode.label()
         )
     };
 
@@ -60,7 +66,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     let footer_text = if app.in_search {
         "Type to filter  [Esc] Clear search  [↑/↓] Navigate  [Enter] View"
     } else {
-        "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [a] Add  [g] Generate  [d] Delete  [Enter] View  [c] Copy pass  [L] Lock  [q] Quit  [?] Help"
+        "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [o] Sort  [a] Add  [g] Generate  [d] Delete  [Enter] View  [c] Copy pass  [L] Lock  [q] Quit  [?] Help"
     };
 
     let footer = Paragraph::new(footer_text)
@@ -70,7 +76,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     f.render_widget(footer, chunks[2]);
 }
 
-/// Aligned multi-column table of entries (title | username | url).
+/// Aligned multi-column table of entries (title | username | modified | url).
 fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let start = app.entry_list_page * app.per_page;
     let end = (start + app.per_page).min(app.entries.len());
@@ -94,42 +100,52 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         return;
     }
 
-    let header = ratatui::widgets::Row::new(vec!["Title", "User", "URL"]).style(
+    let header = Row::new(vec!["Title", "User", "Modified", "URL"]).style(
         Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD),
     );
 
-    let rows: Vec<ratatui::widgets::Row> = page_entries
+    let needle = if app.in_search {
+        app.search_query.to_lowercase()
+    } else {
+        String::new()
+    };
+
+    let rows: Vec<Row> = page_entries
         .iter()
         .map(|e| {
             let user = e.username.as_deref().unwrap_or("-");
             let url = e.url.as_deref().unwrap_or("-");
-            ratatui::widgets::Row::new(vec![
-                ratatui::widgets::Cell::from(e.name.clone())
-                    .style(Style::default().fg(Color::White)),
-                ratatui::widgets::Cell::from(user).style(Style::default().fg(Color::DarkGray)),
-                ratatui::widgets::Cell::from(url).style(Style::default().fg(Color::DarkGray)),
+            let modified = format_date(e.updated_at);
+            Row::new(vec![
+                highlight_cell(&e.name, &needle, Color::White),
+                highlight_cell(user, &needle, Color::DarkGray),
+                Cell::from(modified).style(Style::default().fg(Color::DarkGray)),
+                highlight_cell(url, &needle, Color::DarkGray),
             ])
         })
         .collect();
 
     let total_pages = app.entries.len().div_ceil(app.per_page);
     let title = format!(
-        "Entries ({})  Page {}/{}",
+        "Entries ({}) · {}  Page {}/{}",
         app.entries.len(),
+        app.sort_mode.label(),
         app.entry_list_page + 1,
         total_pages.max(1)
     );
 
     let widths = [
-        ratatui::layout::Constraint::Length(24),
-        ratatui::layout::Constraint::Length(20),
-        ratatui::layout::Constraint::Min(0),
+        Constraint::Length(20),
+        Constraint::Length(18),
+        Constraint::Length(10),
+        Constraint::Min(0),
     ];
 
-    let table = ratatui::widgets::Table::new(rows, widths)
+    let table = Table::new(rows, widths)
         .header(header)
+        .column_spacing(1)
         .block(
             Block::default()
                 .borders(Borders::ALL)
@@ -144,7 +160,7 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         )
         .highlight_symbol("▸ ");
 
-    let mut state = ratatui::widgets::TableState::default();
+    let mut state = TableState::default();
     state.select(Some(app.entry_list_selected.saturating_sub(start)));
     f.render_stateful_widget(table, area, &mut state);
 }
@@ -165,7 +181,7 @@ fn draw_entry_detail_pane(f: &mut Frame, app: &App, area: ratatui::layout::Rect)
         return;
     };
 
-    let content = vec![
+    let mut content = vec![
         Line::from(vec![
             Span::styled("Name: ", Style::default().fg(Color::Yellow)),
             Span::styled(
@@ -187,21 +203,120 @@ fn draw_entry_detail_pane(f: &mut Frame, app: &App, area: ratatui::layout::Rect)
                 Style::default().fg(Color::DarkGray),
             ),
         ]),
+        Line::from(vec![
+            Span::styled("Modified: ", Style::default().fg(Color::Yellow)),
+            Span::raw(format_date(e.updated_at)),
+        ]),
+        Line::from(vec![
+            Span::styled("Created: ", Style::default().fg(Color::Yellow)),
+            Span::raw(format_date(e.created_at)),
+        ]),
         Line::from(""),
         Line::from(vec![
-            Span::styled("[c]", Style::default().fg(Color::Cyan)),
-            Span::raw(" Copy password   "),
-            Span::styled("[u]", Style::default().fg(Color::Cyan)),
-            Span::raw(" Copy user"),
+            Span::styled("Health: ", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                format!("{}/100", e.health.score),
+                Style::default()
+                    .fg(App::health_color(e.health.score))
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
-        Line::from(vec![
-            Span::styled("[Enter]", Style::default().fg(Color::Cyan)),
-            Span::raw(" Open details"),
-        ]),
+        Line::from(vec![Span::styled(
+            format!("  {}", e.health.reason),
+            Style::default().fg(Color::DarkGray),
+        )]),
+        Line::from(""),
     ];
 
+    // Notes, wrapped so long text stays inside the pane.
+    if let Some(notes) = &e.notes {
+        if !notes.is_empty() {
+            content.push(Line::from(vec![Span::styled(
+                "Notes: ",
+                Style::default().fg(Color::Yellow),
+            )]));
+            for line in notes.lines() {
+                content.push(Line::from(Span::styled(
+                    line,
+                    Style::default().fg(Color::White),
+                )));
+            }
+            content.push(Line::from(""));
+        }
+    }
+
+    content.push(Line::from(vec![
+        Span::styled("[c]", Style::default().fg(Color::Cyan)),
+        Span::raw(" Copy password   "),
+        Span::styled("[u]", Style::default().fg(Color::Cyan)),
+        Span::raw(" Copy user"),
+    ]));
+    content.push(Line::from(vec![
+        Span::styled("[Enter]", Style::default().fg(Color::Cyan)),
+        Span::raw(" Open details"),
+    ]));
+
     let pane = Paragraph::new(content)
+        .wrap(ratatui::widgets::Wrap { trim: false })
         .style(Style::default().fg(Color::White))
         .block(block);
     f.render_widget(pane, area);
+}
+
+/// Formats an `OffsetDateTime` as `YYYY-MM-DD`.
+fn format_date(t: time::OffsetDateTime) -> String {
+    let date = t.date();
+    format!(
+        "{:04}-{:02}-{:02}",
+        date.year(),
+        date.month() as u8,
+        date.day()
+    )
+}
+
+/// Builds a cell that highlights every occurrence of `needle` (case-insensitive)
+/// inside `text`. When the needle is empty or absent, the text is plain.
+fn highlight_cell<'a>(text: &'a str, needle: &str, base: Color) -> Cell<'a> {
+    if needle.is_empty() {
+        return Cell::from(text).style(Style::default().fg(base));
+    }
+
+    let lower = text.to_lowercase();
+    let matches: Vec<(usize, usize)> = {
+        let mut spans = Vec::new();
+        let mut search_from = 0;
+        while let Some(pos) = lower[search_from..].find(needle) {
+            let start = search_from + pos;
+            let end = start + needle.len();
+            spans.push((start, end));
+            search_from = end;
+        }
+        spans
+    };
+
+    if matches.is_empty() {
+        return Cell::from(text).style(Style::default().fg(base));
+    }
+
+    let highlight = Style::default()
+        .fg(Color::Cyan)
+        .add_modifier(Modifier::BOLD);
+
+    let mut line = Line::default();
+    let mut cursor = 0;
+    for (start, end) in matches {
+        if start > cursor {
+            line.push_span(Span::styled(
+                &text[cursor..start],
+                Style::default().fg(base),
+            ));
+        }
+        line.push_span(Span::styled(&text[start..end], highlight));
+        cursor = end;
+    }
+    if cursor < text.len() {
+        line.push_span(Span::styled(&text[cursor..], Style::default().fg(base)));
+    }
+
+    Cell::from(line)
 }
