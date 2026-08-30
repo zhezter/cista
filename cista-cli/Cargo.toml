@@ -2,6 +2,11 @@
 name = "cista-cli"
 version = "0.1.0"
 edition = "2021"
+description = "Command-line interface for Cista, a local, encrypted password manager"
+license = "MIT"
+repository = "https://github.com/zhezter/cista"
+keywords = ["password", "vault", "cli", "encryption", "secret"]
+categories = ["command-line-utilities", "cryptography"]
 
 [[bin]]
 name = "cista"
@@ -11,10 +16,10 @@ path = "src/main.rs"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
 anyhow = "1"
-cista-core = { path = "../cista-core" }
+cista-core = { version = "0.1.0", path = "../cista-core" }
 rpassword = "7"
 secrecy = { version = "0.8", features = ["serde"] }
-arboard = "*"
+arboard = "3"
 colored = "3"
 rustyline = "14"
 libc = "0.2"

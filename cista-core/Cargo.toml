@@ -2,6 +2,11 @@
 name = "cista-core"
 version = "0.1.0"
 edition = "2021"
+description = "Core library for Cista, a local, encrypted password manager"
+license = "MIT"
+repository = "https://github.com/zhezter/cista"
+keywords = ["password", "vault", "encryption", "argon2", "secret"]
+categories = ["cryptography", "password", "authentication"]
 
 [dependencies]
 secrecy = { version = "0.8", features = ["serde"] }
