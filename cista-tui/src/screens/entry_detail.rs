@@ -86,7 +86,7 @@ pub fn draw_entry_detail(f: &mut Frame, app: &mut App) {
 
     // Footer
     let footer = Paragraph::new(
-        "Space Reveal  c Copy pass  u Copy user  l Copy URL  e Edit  d Delete  Esc Back",
+        "[Space] Reveal  [c] Copy pass  [u] Copy user  [l] Copy URL  [e] Edit  [d] Delete  [Esc] Back",
     )
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center)

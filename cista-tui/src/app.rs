@@ -117,6 +117,7 @@ pub struct VaultInfo {
     pub last_opened: Option<String>,
     pub entry_count: Option<usize>,
     pub size: u64,
+    pub created: Option<std::time::SystemTime>,
 }
 
 #[derive(Debug, Clone)]
@@ -278,12 +279,16 @@ impl App {
                             let size = std::fs::metadata(entry.path())
                                 .map(|m| m.len())
                                 .unwrap_or(0);
+                            let created = std::fs::metadata(entry.path())
+                                .and_then(|m| m.created())
+                                .ok();
                             self.vaults.push(VaultInfo {
                                 name,
                                 path: entry.path(),
                                 last_opened,
                                 entry_count,
                                 size,
+                                created,
                             });
                         }
                     }
@@ -411,10 +416,17 @@ impl App {
         let Some(task) = &self.pending else { return };
         let elapsed = task.started.elapsed().as_millis() as usize;
 
-        let backdrop = Block::default().style(Style::default().bg(Color::Black));
+        // Soft, dimmed backdrop: a dark grey tint rather than a solid black
+        // wall, so the running screen stays faintly visible behind the modal
+        // instead of being completely blanked out.
+        let backdrop = Block::default().style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::DIM),
+        );
         f.render_widget(backdrop, f.area());
 
-        let area = centered_rect(46, 22, f.area());
+        let area = centered_rect(46, 18, f.area());
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -1043,22 +1055,31 @@ impl App {
         AppSignal::Continue
     }
 
+    /// Applies `f` to the currently selected entry. Works from both the entry
+    /// list (selected/hovered row) and the entry detail screen, so a plain key
+    /// can copy the password (or username/URL) of the row under the cursor
+    /// without opening it first.
     fn copy_from_entry(
         &mut self,
         f: impl FnOnce(&cista_core::Entry) -> anyhow::Result<()>,
         ok_msg: &str,
     ) {
-        if self.screen == Screen::EntryDetail {
-            if let Some(idx) = self.detail_entry_idx {
-                if self.entries.get(idx).is_some() {
-                    if let Some(vault) = &self.vault {
-                        if let Some(entry) = vault.find_by_id(self.entries[idx].id) {
-                            match f(entry) {
-                                Ok(()) => self.set_status(ok_msg),
-                                Err(_) => self.set_error("Clipboard unavailable"),
-                            }
-                        }
-                    }
+        if self.screen != Screen::EntryList && self.screen != Screen::EntryDetail {
+            return;
+        }
+        let idx = match self.screen {
+            Screen::EntryDetail => self.detail_entry_idx,
+            _ => self.get_selected_entry_idx(),
+        };
+        let Some(idx) = idx else { return };
+        if self.entries.get(idx).is_none() {
+            return;
+        }
+        if let Some(vault) = &self.vault {
+            if let Some(entry) = vault.find_by_id(self.entries[idx].id) {
+                match f(entry) {
+                    Ok(()) => self.set_status(ok_msg),
+                    Err(_) => self.set_error("Clipboard unavailable"),
                 }
             }
         }

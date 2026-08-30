@@ -79,10 +79,11 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
         );
     }
 
-    let footer = Paragraph::new("↑/↓ Scroll  PgUp/PgDn Page  Home/End Top/Bottom  q or ? Close")
-        .style(Style::default().fg(Color::DarkGray))
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::TOP));
+    let footer =
+        Paragraph::new("[↑/↓] Scroll  [PgUp/PgDn] Page  [Home/End] Top/Bottom  [q] or [?] Close")
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[2]);
 }
 

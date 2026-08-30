@@ -81,7 +81,7 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
 
     // Footer
     let footer = Paragraph::new(
-        "Tab/Shift+Tab Next/Prev field  Ctrl+s Save  Esc Back  (secrets are not echoed)",
+        "[Tab] Shift+Tab Next/Prev  [Ctrl+s] Save  [Esc] Back  (secrets are not echoed)",
     )
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center)

@@ -115,7 +115,7 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
 
     // Footer
     let footer = Paragraph::new(
-        "↑/↓ or j/k Move  Space Toggle  ←/→ Change  ↵ Generate  r Reroll  c Copy  Esc Back",
+        "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Esc] Back",
     )
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center)

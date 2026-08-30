@@ -42,7 +42,7 @@ pub fn draw_confirm(f: &mut Frame, app: &mut App) {
     f.render_widget(msg, chunks[1]);
 
     // Buttons
-    let buttons = Paragraph::new("Enter Yes  Esc No")
+    let buttons = Paragraph::new("[Enter] Yes  [Esc] No")
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));

@@ -87,7 +87,7 @@ pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
 
     // Footer
     let footer = Paragraph::new(
-        "Tab Next  Shift+Tab Prev  Ctrl+s Create  Esc Cancel  (secrets are not echoed)",
+        "[Tab] Next  [Shift+Tab] Prev  [Ctrl+s] Create  [Esc] Cancel  (secrets are not echoed)",
     )
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center)

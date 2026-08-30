@@ -80,7 +80,7 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
     }
 
     // Hint
-    let hint = Paragraph::new("Enter Unlock  Esc Back  (secrets are not echoed)")
+    let hint = Paragraph::new("[Enter] Unlock  [Esc] Back  (secrets are not echoed)")
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
     f.render_widget(hint, chunks[4]);
