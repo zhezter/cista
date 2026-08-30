@@ -5,7 +5,7 @@ edition = "2021"
 description = "Terminal UI for Cista, a local, encrypted password manager"
 license = "MIT"
 repository = "https://github.com/zhezter/cista"
-keywords = ["password", "vault", "tui", "terminal", "secret"]
+keywords = ["vault", "tui", "terminal", "security"]
 categories = ["command-line-utilities", "cryptography"]
 
 [dependencies]
