@@ -13,15 +13,40 @@ pub enum EntryType {
     Login,
     Card,
     Note,
+    Identity,
+    Bank,
+    Email,
+    Wifi,
+    Server,
+    Crypto,
 }
 
 impl EntryType {
+    /// Every available entry type, in selector order.
+    pub const ALL: [EntryType; 9] = [
+        EntryType::Login,
+        EntryType::Card,
+        EntryType::Note,
+        EntryType::Identity,
+        EntryType::Bank,
+        EntryType::Email,
+        EntryType::Wifi,
+        EntryType::Server,
+        EntryType::Crypto,
+    ];
+
     /// Human-readable label.
     pub fn label(self) -> &'static str {
         match self {
             EntryType::Login => "Login",
             EntryType::Card => "Card",
             EntryType::Note => "Note",
+            EntryType::Identity => "Identity",
+            EntryType::Bank => "Bank",
+            EntryType::Email => "Email",
+            EntryType::Wifi => "Wi-Fi",
+            EntryType::Server => "Server",
+            EntryType::Crypto => "Crypto",
         }
     }
 
@@ -32,7 +57,22 @@ impl EntryType {
             EntryType::Login => "🔑",
             EntryType::Card => "💳",
             EntryType::Note => "📝",
+            EntryType::Identity => "🪪",
+            EntryType::Bank => "🏦",
+            EntryType::Email => "✉️",
+            EntryType::Wifi => "📶",
+            EntryType::Server => "🖥️",
+            EntryType::Crypto => "🪙",
         }
+    }
+
+    /// The next type in cycling order, wrapping around to the first.
+    pub fn next(self) -> EntryType {
+        let idx = EntryType::ALL
+            .iter()
+            .position(|t| *t == self)
+            .unwrap_or(0);
+        EntryType::ALL[(idx + 1) % EntryType::ALL.len()]
     }
 }
 

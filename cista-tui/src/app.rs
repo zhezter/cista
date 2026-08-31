@@ -91,12 +91,10 @@ pub struct App {
     pub pending: Option<PendingTask>,
 }
 
-
 pub struct VaultListState {
     pub vaults: Vec<VaultInfo>,
     pub selected: usize,
 }
-
 
 pub struct UnlockState {
     pub password: String,
@@ -105,7 +103,6 @@ pub struct UnlockState {
     /// vault, or confirming a password before deleting a vault.
     pub mode: UnlockMode,
 }
-
 
 pub struct SessionState {
     pub vault_path: Option<PathBuf>,
@@ -116,7 +113,6 @@ pub struct SessionState {
     pub last_activity: Instant,
     pub auto_lock_seconds: u64,
 }
-
 
 pub struct EntryListState {
     pub all_entries: Vec<EntryRow>,
@@ -129,12 +125,10 @@ pub struct EntryListState {
     pub sort_mode: SortMode,
 }
 
-
 pub struct EntryDetailState {
     pub entry_idx: Option<usize>,
     pub show_password: bool,
 }
-
 
 pub struct EntryFormState {
     pub mode: FormMode,
@@ -142,12 +136,10 @@ pub struct EntryFormState {
     pub field_idx: usize,
 }
 
-
 pub struct NewVaultState {
     pub fields: NewVaultFields,
     pub field_idx: usize,
 }
-
 
 pub struct GenerateState {
     pub policy: GenPolicy,
@@ -164,12 +156,10 @@ pub struct GenerateState {
     pub prev_screen: Option<Screen>,
 }
 
-
 pub struct ConfirmState {
     pub message: String,
     pub on_yes: Option<ConfirmAction>,
 }
-
 
 pub struct HelpState {
     pub scroll: u16,
@@ -643,7 +633,9 @@ impl App {
     fn active_text_buffer(&mut self) -> Option<&mut String> {
         match self.screen {
             Screen::Unlock => Some(&mut self.unlock.password),
-            Screen::EntryList if self.entry_list.in_search => Some(&mut self.entry_list.search_query),
+            Screen::EntryList if self.entry_list.in_search => {
+                Some(&mut self.entry_list.search_query)
+            }
             Screen::EntryForm => Some(match self.entry_form.field_idx {
                 0 => &mut self.entry_form.fields.name,
                 1 => &mut self.entry_form.fields.username,
@@ -967,7 +959,6 @@ impl App {
         self.reset_form_fields();
     }
 
-
     /// Left/Right move across the focused generate option. For `Length` the
     /// value changes; for the boolean categories it toggles the state.
     fn handle_left(&mut self) -> AppSignal {
@@ -975,7 +966,8 @@ impl App {
             let option = GenOption::ALL[self.generate.selected];
             match option {
                 GenOption::Length => {
-                    self.generate.policy.length = self.generate.policy.length.saturating_sub(1).max(4);
+                    self.generate.policy.length =
+                        self.generate.policy.length.saturating_sub(1).max(4);
                 }
                 _ => self.toggle_gen_option(option),
             }
@@ -1075,7 +1067,10 @@ impl App {
 
     fn handle_page_up(&mut self) -> AppSignal {
         if self.screen == Screen::EntryList {
-            self.entry_list.selected = self.entry_list.selected.saturating_sub(self.entry_list.per_page);
+            self.entry_list.selected = self
+                .entry_list
+                .selected
+                .saturating_sub(self.entry_list.per_page);
             self.adjust_page();
         } else if self.screen == Screen::Help {
             self.help.scroll = self.help.scroll.saturating_sub(15);
@@ -1122,7 +1117,12 @@ impl App {
     fn handle_enter(&mut self) -> AppSignal {
         match self.screen {
             Screen::VaultList => {
-                if let Some(vault) = self.vault_list.vaults.get(self.vault_list.selected).cloned() {
+                if let Some(vault) = self
+                    .vault_list
+                    .vaults
+                    .get(self.vault_list.selected)
+                    .cloned()
+                {
                     self.session.vault_path = Some(vault.path);
                     self.unlock.mode = UnlockMode::Open;
                     self.screen = Screen::Unlock;
@@ -1144,14 +1144,13 @@ impl App {
                     self.screen = Screen::EntryDetail;
                 }
             }
-            Screen::EntryForm => {
-                if self.entry_form.field_idx == 7 {
-                    // Cycling the entry type selector field.
-                    self.cycle_entry_type();
-                } else {
+            Screen::EntryForm => match self.entry_form.field_idx {
+                6 => self.cycle_icon(),
+                7 => self.cycle_entry_type(),
+                _ => {
                     self.handle_tab_next();
                 }
-            }
+            },
             Screen::NewVault => {
                 self.handle_tab_next();
             }
@@ -1253,7 +1252,8 @@ impl App {
             self.entry_list.all_entries.clone()
         } else {
             let q = self.entry_list.search_query.to_lowercase();
-            self.entry_list.all_entries
+            self.entry_list
+                .all_entries
                 .iter()
                 .filter(|e| {
                     e.name.to_lowercase().contains(&q)
@@ -1299,7 +1299,11 @@ impl App {
         if self.entry_list.entries.is_empty() {
             None
         } else {
-            Some(self.entry_list.selected.min(self.entry_list.entries.len() - 1))
+            Some(
+                self.entry_list
+                    .selected
+                    .min(self.entry_list.entries.len() - 1),
+            )
         }
     }
 
@@ -1441,7 +1445,8 @@ impl App {
             if self.generate.from_form {
                 if let Some(pwd) = self.generate.result.clone() {
                     self.entry_form.fields.password = pwd;
-                    self.entry_form.fields.password_confirm = self.entry_form.fields.password.clone();
+                    self.entry_form.fields.password_confirm =
+                        self.entry_form.fields.password.clone();
                     self.generate.from_form = false;
                     self.generate.result = None;
                     self.screen = self.generate.prev_screen.unwrap_or(Screen::EntryForm);
@@ -1485,7 +1490,8 @@ impl App {
             }
             Screen::EntryList | Screen::EntryDetail => {
                 let idx = self
-                    .entry_detail.entry_idx
+                    .entry_detail
+                    .entry_idx
                     .or_else(|| self.get_selected_entry_idx());
                 if let Some(idx) = idx {
                     if let Some(entry) = self.entry_list.entries.get(idx) {
@@ -1599,7 +1605,12 @@ impl App {
                                     .notes()
                                     .map(|n| n.expose_secret().as_str().to_string())
                                     .unwrap_or_default(),
-                                icon: self.session.ui_state.icon(entry.id()).unwrap_or("").to_string(),
+                                icon: self
+                                    .session
+                                    .ui_state
+                                    .icon(entry.id())
+                                    .unwrap_or("")
+                                    .to_string(),
                                 entry_type: self.session.ui_state.entry_type(entry.id()),
                             };
                             self.entry_form.field_idx = 0;
@@ -1615,7 +1626,9 @@ impl App {
 
     fn handle_reveal(&mut self) -> AppSignal {
         match self.screen {
-            Screen::EntryDetail => self.entry_detail.show_password = !self.entry_detail.show_password,
+            Screen::EntryDetail => {
+                self.entry_detail.show_password = !self.entry_detail.show_password
+            }
             // Space toggles the focused option on the generate screen.
             Screen::Generate => {
                 let option = GenOption::ALL[self.generate.selected];
@@ -1652,15 +1665,32 @@ impl App {
         AppSignal::Continue
     }
 
-    /// Cycle the entry type selector (Login → Card → Note → …) when pressed
-    /// while the type field is focused.
+    /// Cycle the entry type selector when pressed while the type field is
+    /// focused. Walks through every variant in [`EntryType::ALL`], wrapping
+    /// around at the end.
     fn cycle_entry_type(&mut self) {
-        let next = match self.entry_form.fields.entry_type {
-            EntryType::Login => EntryType::Card,
-            EntryType::Card => EntryType::Note,
-            EntryType::Note => EntryType::Login,
+        self.entry_form.fields.entry_type = self.entry_form.fields.entry_type.next();
+    }
+
+    /// Palette of preset icons offered in the entry form. The empty string is
+    /// "no custom icon", which falls back to the entry type's default.
+    fn icon_palette() -> &'static [&'static str] {
+        &[
+            "", "🔑", "💳", "📝", "🪪", "🏦", "✉️", "📶", "🖥️", "🪙", "🛍️", "🎮", "📞", "☁️", "🛡️",
+            "🔒",
+        ]
+    }
+
+    /// Cycle the entry form's icon field through the preset palette when
+    /// pressed while the icon field is focused.
+    fn cycle_icon(&mut self) {
+        let palette = Self::icon_palette();
+        let current = self.entry_form.fields.icon.as_str();
+        let next = match palette.iter().position(|i| *i == current) {
+            Some(idx) => palette[(idx + 1) % palette.len()],
+            None => palette[0],
         };
-        self.entry_form.fields.entry_type = next;
+        self.entry_form.fields.icon = next.to_string();
     }
 
     fn handle_save(&mut self) -> AppSignal {
@@ -1677,7 +1707,8 @@ impl App {
             match action {
                 ConfirmAction::DeleteEntry => {
                     let idx = self
-                        .entry_detail.entry_idx
+                        .entry_detail
+                        .entry_idx
                         .or_else(|| self.get_selected_entry_idx());
                     if let Some(idx) = idx {
                         if let Some(entry) = self.entry_list.entries.get(idx).cloned() {
@@ -1918,7 +1949,8 @@ impl App {
         }
         if !self.session.locked
             && self.session.auto_lock_seconds > 0
-            && self.session.last_activity.elapsed() >= Duration::from_secs(self.session.auto_lock_seconds)
+            && self.session.last_activity.elapsed()
+                >= Duration::from_secs(self.session.auto_lock_seconds)
         {
             self.lock_vault();
         }

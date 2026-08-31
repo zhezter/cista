@@ -45,6 +45,11 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     // Fields
     let masked_pw = mask_password(&app.entry_form.fields.password);
     let masked_cf = mask_password(&app.entry_form.fields.password_confirm);
+    let icon_display = if app.entry_form.fields.icon.is_empty() {
+        format!("{} (default)", app.entry_form.fields.entry_type.default_icon())
+    } else {
+        app.entry_form.fields.icon.clone()
+    };
     let fields = [
         ("Service name", app.entry_form.fields.name.as_str(), 1, false),
         ("Username", app.entry_form.fields.username.as_str(), 2, false),
@@ -52,7 +57,7 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
         ("Confirm password", masked_cf.as_str(), 4, false),
         ("URL", app.entry_form.fields.url.as_str(), 5, false),
         ("Notes", app.entry_form.fields.notes.as_str(), 6, false),
-        ("Icon", app.entry_form.fields.icon.as_str(), 7, false),
+        ("Icon", icon_display.as_str(), 7, false),
         ("Type", app.entry_form.fields.entry_type.label(), 8, true),
     ];
 
@@ -70,7 +75,9 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
         } else {
             Style::default().fg(Color::DarkGray)
         };
-        let title = if is_type && is_active {
+        // Icon and Type are selectors cycled with Enter rather than text fields.
+        let is_selector = is_type || label == "Icon";
+        let title = if is_selector && is_active {
             format!(" {}  (Enter: cycle) ", label)
         } else {
             format!(" {} ", label)
@@ -95,9 +102,10 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[10]);
 
-    // Cursor for the active text field (skip the type selector).
-    if let Some((_, value, idx, is_type)) = fields.get(app.entry_form.field_idx) {
-        if !*is_type {
+    // Cursor for the active text field (skip the Icon and Type selectors).
+    if let Some((label, value, idx, is_type)) = fields.get(app.entry_form.field_idx) {
+        let is_selector = *is_type || *label == "Icon";
+        if !is_selector {
             let field_chunk = chunks[*idx];
             f.set_cursor_position((field_chunk.x + 1 + cursor_offset(value), field_chunk.y + 1));
         }
