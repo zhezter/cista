@@ -66,7 +66,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     let footer_text = if app.in_search {
         "Type to filter  [Esc] Clear search  [↑/↓] Navigate  [Enter] View"
     } else {
-        "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [a] Add  [Ctrl+g] Generate  [d] Delete  [Enter] View  [c] Copy pass  [q] Quit  [?] Help"
+        "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [a] Add  [Ctrl+g] Generate  [f] Favourite  [d] Delete  [Enter] View  [c] Copy pass  [q] Quit  [?] Help"
     };
 
     let footer = Paragraph::new(footer_text)
@@ -100,7 +100,7 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         return;
     }
 
-    let header = Row::new(vec!["Title", "User", "Modified", "URL"]).style(
+    let header = Row::new(vec!["★", "Title", "User", "Modified", "URL"]).style(
         Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD),
@@ -118,7 +118,14 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             let user = e.username.as_deref().unwrap_or("-");
             let url = e.url.as_deref().unwrap_or("-");
             let modified = format_date(e.updated_at);
+            let fav = if e.favorite { "★" } else { "·" };
+            let fav_style = if e.favorite {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
             Row::new(vec![
+                Cell::from(fav).style(fav_style),
                 highlight_cell(&e.name, &needle, Color::White),
                 highlight_cell(user, &needle, Color::DarkGray),
                 Cell::from(modified).style(Style::default().fg(Color::DarkGray)),
@@ -137,8 +144,9 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     );
 
     let widths = [
+        Constraint::Length(2),
         Constraint::Length(20),
-        Constraint::Length(18),
+        Constraint::Length(16),
         Constraint::Length(10),
         Constraint::Min(0),
     ];
@@ -191,6 +199,18 @@ fn draw_entry_detail_pane(f: &mut Frame, app: &App, area: ratatui::layout::Rect)
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
+        Line::from(vec![Span::styled(
+            if e.favorite {
+                "★ Favourite"
+            } else {
+                "Not favourite"
+            },
+            if e.favorite {
+                Style::default().fg(Color::Yellow)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            },
+        )]),
         Line::from(""),
         Line::from(vec![
             Span::styled("Username: ", Style::default().fg(Color::Yellow)),

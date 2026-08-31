@@ -127,6 +127,7 @@ fn build_help_lines() -> Vec<Line<'static>> {
         row("  /           Search (type to filter)"),
         row("  o           Sort: Name A-Z/Z-A, Modified, Created"),
         row("  a           Add entry"),
+        row("  f           Toggle favourite"),
         row("  d           Delete entry"),
         row("  Enter       View entry"),
         Line::from(""),

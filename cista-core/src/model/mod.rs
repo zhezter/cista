@@ -129,4 +129,49 @@ mod tests {
         let vault: Vault = serde_json::from_slice(old_json).expect("old vault deserializes");
         assert_eq!(vault.created_at(), time::OffsetDateTime::UNIX_EPOCH);
     }
+
+    #[test]
+    fn favorite_defaults_to_false_for_old_entries() {
+        // A vault written before the `favorite` field existed must deserialize
+        // with favorite == false, so old vaults keep opening. The JSON uses the
+        // actual serialized format (uuid bytes + OffsetDateTime component array).
+        let old_json = br#"{
+            "version":1,
+            "entries":[
+                {
+                    "id":"11111111-1111-1111-1111-111111111111",
+                    "name":"github",
+                    "username":null,
+                    "password":"hunter2",
+                    "url":null,
+                    "notes":null,
+                    "created_at":[2024,1,0,0,0,0,0,0,0],
+                    "updated_at":[2024,1,0,0,0,0,0,0,0]
+                }
+            ]
+        }"#;
+        let vault: Vault = serde_json::from_slice(old_json).expect("old vault deserializes");
+        assert_eq!(vault.entries().len(), 1);
+        assert!(!vault.entries()[0].is_favorite());
+    }
+
+    #[test]
+    fn favorite_round_trips() {
+        let mut vault = Vault::new();
+        let mut entry = Entry::new(
+            "github".to_string(),
+            None,
+            Secret::new(SecretString::from("hunter2".to_string())),
+            None,
+            None,
+        )
+        .expect("valid entry");
+        entry.set_favorite(true);
+        assert!(entry.is_favorite());
+        vault.add_entry(entry);
+
+        let sealed = vault.seal(b"pw").expect("seal");
+        let opened = Vault::open(&sealed, b"pw").expect("open");
+        assert!(opened.entries()[0].is_favorite());
+    }
 }

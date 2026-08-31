@@ -13,6 +13,8 @@ pub struct Entry {
     password: Secret<SecretString>,
     url: Option<String>,
     notes: Option<Secret<SecretString>>,
+    #[serde(default)]
+    favorite: bool,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -37,6 +39,7 @@ impl Entry {
             password,
             url,
             notes: notes.map(|n| Secret::new(SecretString::from(n))),
+            favorite: false,
             created_at: now,
             updated_at: now,
         })
@@ -66,6 +69,14 @@ impl Entry {
 
     pub fn updated_at(&self) -> OffsetDateTime {
         self.updated_at
+    }
+
+    pub fn is_favorite(&self) -> bool {
+        self.favorite
+    }
+
+    pub fn set_favorite(&mut self, favorite: bool) {
+        self.favorite = favorite;
     }
 }
 

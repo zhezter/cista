@@ -141,6 +141,7 @@ pub struct EntryRow {
     pub username: Option<String>,
     pub url: Option<String>,
     pub notes: Option<String>,
+    pub favorite: bool,
     pub created_at: time::OffsetDateTime,
     pub updated_at: time::OffsetDateTime,
     pub health: cista_core::health::Health,
@@ -664,6 +665,7 @@ impl App {
             Action::NewVault => self.handle_new_vault(),
             Action::Reroll => self.handle_reroll(),
             Action::Sort => self.handle_sort(),
+            Action::ToggleFavorite => self.handle_toggle_favorite(),
             Action::TabNext => self.handle_tab_next(),
             Action::TabPrev => self.handle_tab_prev(),
             Action::Save => self.handle_save(),
@@ -796,6 +798,53 @@ impl App {
             self.recompute_filtered_entries();
             self.set_status(&format!("Sorted by {label}"));
         }
+        AppSignal::Continue
+    }
+
+    /// Toggle the favourite flag on the selected entry ('f'). Updates both the
+    /// in-memory row and the vault, then persists in the background.
+    fn handle_toggle_favorite(&mut self) -> AppSignal {
+        if self.screen != Screen::EntryList {
+            return AppSignal::Continue;
+        }
+        let Some(idx) = self.get_selected_entry_idx() else {
+            return AppSignal::Continue;
+        };
+        let entry_id = self.entries[idx].id;
+        let new_val = !self
+            .all_entries
+            .iter()
+            .find(|e| e.id == entry_id)
+            .map(|e| e.favorite)
+            .unwrap_or(false);
+
+        // Update both the pristine list and the visible list.
+        for e in self.all_entries.iter_mut() {
+            if e.id == entry_id {
+                e.favorite = new_val;
+            }
+        }
+        for e in self.entries.iter_mut() {
+            if e.id == entry_id {
+                e.favorite = new_val;
+            }
+        }
+
+        // Persist to the vault and trigger a background save.
+        if let Some(vault) = &mut self.vault {
+            if let Some(entry) = vault.find_by_id_mut(entry_id) {
+                entry.set_favorite(new_val);
+                self.start_save_task(TaskKind::SaveEntryEdit);
+            }
+        }
+
+        // Keep favorites at the top.
+        self.recompute_filtered_entries();
+        self.set_status(if new_val {
+            "Marked as favourite"
+        } else {
+            "Removed from favourites"
+        });
         AppSignal::Continue
     }
 
@@ -963,6 +1012,7 @@ impl App {
                     notes: entry
                         .notes()
                         .map(|n| n.expose_secret().as_str().to_string()),
+                    favorite: entry.is_favorite(),
                     created_at: entry.created_at(),
                     updated_at: entry.updated_at(),
                     health: healths[i].clone(),
@@ -1001,13 +1051,20 @@ impl App {
                 .collect()
         };
 
-        entries.sort_by(|a, b| match self.sort_mode {
-            SortMode::NameAsc => name_cmp(a, b),
-            SortMode::NameDesc => name_cmp(b, a),
-            SortMode::UpdatedDesc => b.updated_at.cmp(&a.updated_at),
-            SortMode::UpdatedAsc => a.updated_at.cmp(&b.updated_at),
-            SortMode::CreatedDesc => b.created_at.cmp(&a.created_at),
-            SortMode::CreatedAsc => a.created_at.cmp(&b.created_at),
+        // Favorites always come first; within each group the requested sort
+        // order applies. `sort_by` is stable, so equal-category rows keep
+        // their relative order from the search filter.
+        entries.sort_by(|a, b| {
+            b.favorite
+                .cmp(&a.favorite)
+                .then_with(|| match self.sort_mode {
+                    SortMode::NameAsc => name_cmp(a, b),
+                    SortMode::NameDesc => name_cmp(b, a),
+                    SortMode::UpdatedDesc => b.updated_at.cmp(&a.updated_at),
+                    SortMode::UpdatedAsc => a.updated_at.cmp(&b.updated_at),
+                    SortMode::CreatedDesc => b.created_at.cmp(&a.created_at),
+                    SortMode::CreatedAsc => a.created_at.cmp(&b.created_at),
+                })
         });
 
         self.entries = entries;
