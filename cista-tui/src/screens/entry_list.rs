@@ -66,7 +66,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     let footer_text = if app.in_search {
         "Type to filter  [Esc] Clear search  [↑/↓] Navigate  [Enter] View"
     } else {
-        "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [o] Sort  [a] Add  [Ctrl+g] Generate  [d] Delete  [Enter] View  [c] Copy pass  [L] Lock  [q] Quit  [?] Help"
+        "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [a] Add  [Ctrl+g] Generate  [d] Delete  [Enter] View  [c] Copy pass  [q] Quit  [?] Help"
     };
 
     let footer = Paragraph::new(footer_text)

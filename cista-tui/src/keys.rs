@@ -31,6 +31,10 @@ pub struct KeyBindings {
     pub sort: KeyBinding,
     pub tab_next: KeyBinding,
     pub tab_prev: KeyBinding,
+    /// Shift+Tab is reported as `BackTab` by crossterm on most terminals, but
+    /// some report `Tab` with the SHIFT modifier set instead. `tab_prev_shift`
+    /// covers that variant.
+    pub tab_prev_shift: KeyBinding,
     pub save: KeyBinding,
 }
 
@@ -79,7 +83,8 @@ impl Default for KeyBindings {
             reroll: kb(Char('r'), KeyModifiers::NONE),
             sort: kb(Char('o'), KeyModifiers::NONE),
             tab_next: kb(Tab, KeyModifiers::NONE),
-            tab_prev: kb(BackTab, KeyModifiers::NONE),
+            tab_prev: kb(BackTab, KeyModifiers::SHIFT),
+            tab_prev_shift: kb(Tab, KeyModifiers::SHIFT),
             save: kb(Char('s'), KeyModifiers::CONTROL),
         }
     }
@@ -101,6 +106,7 @@ const GLOBAL: &[Binding] = &[
     (Action::Back, |b| &b.back),
     (Action::TabNext, |b| &b.tab_next),
     (Action::TabPrev, |b| &b.tab_prev),
+    (Action::TabPrev, |b| &b.tab_prev_shift),
     (Action::Save, |b| &b.save),
 ];
 

@@ -102,6 +102,11 @@ pub struct App {
     /// second Ctrl+g (or Enter after generating) drops the generated password
     /// into the form's password field and returns to the form.
     pub gen_from_form: bool,
+    /// Screen the generator was opened from, so Esc/apply always lands back on
+    /// it. Kept separate from `previous_screen`, which the entry form relies on
+    /// (its own "back" destination), so opening the generator from the form
+    /// doesn't clobber the form's exit target.
+    pub gen_prev_screen: Option<Screen>,
 
     // Confirm dialog
     pub confirm_message: String,
@@ -313,6 +318,7 @@ impl App {
             gen_selected: 0,
             gen_result: None,
             gen_from_form: false,
+            gen_prev_screen: None,
             confirm_message: String::new(),
             confirm_on_yes: None,
             help_scroll: 0,
@@ -1088,7 +1094,7 @@ impl App {
                 self.screen = Screen::VaultList;
             }
             Screen::Generate => {
-                self.screen = self.previous_screen.unwrap_or(Screen::VaultList);
+                self.screen = self.gen_prev_screen.unwrap_or(Screen::VaultList);
                 self.gen_result = None;
                 self.gen_from_form = false;
             }
@@ -1158,7 +1164,7 @@ impl App {
                     self.form_fields.password_confirm = self.form_fields.password.clone();
                     self.gen_from_form = false;
                     self.gen_result = None;
-                    self.screen = self.previous_screen.unwrap_or(Screen::EntryForm);
+                    self.screen = self.gen_prev_screen.unwrap_or(Screen::EntryForm);
                     self.set_status("Generated password applied to form");
                 } else {
                     self.set_error("Generate a password first");
@@ -1166,8 +1172,8 @@ impl App {
             }
             return AppSignal::Continue;
         }
-        self.previous_screen = Some(self.screen);
         self.gen_from_form = self.screen == Screen::EntryForm;
+        self.gen_prev_screen = Some(self.screen);
         self.screen = Screen::Generate;
         self.gen_policy = GenPolicy::default();
         self.gen_result = None;
