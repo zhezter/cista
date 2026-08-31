@@ -15,4 +15,4 @@ pub mod storage;
 mod serialization;
 
 pub use error::{CoreError, CoreResult};
-pub use model::{Entry, SecretString, Vault};
+pub use model::{Entry, EntryType, SecretString, Vault};

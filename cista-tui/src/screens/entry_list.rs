@@ -100,7 +100,7 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         return;
     }
 
-    let header = Row::new(vec!["★", "Title", "User", "Modified", "URL"]).style(
+    let header = Row::new(vec!["★", "Icon", "Title", "User", "Modified", "URL"]).style(
         Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD),
@@ -126,6 +126,7 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             };
             Row::new(vec![
                 Cell::from(fav).style(fav_style),
+                Cell::from(e.icon.as_str()).style(Style::default().fg(Color::Cyan)),
                 highlight_cell(&e.name, &needle, Color::White),
                 highlight_cell(user, &needle, Color::DarkGray),
                 Cell::from(modified).style(Style::default().fg(Color::DarkGray)),
@@ -145,8 +146,9 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
 
     let widths = [
         Constraint::Length(2),
-        Constraint::Length(20),
-        Constraint::Length(16),
+        Constraint::Length(4),
+        Constraint::Length(18),
+        Constraint::Length(14),
         Constraint::Length(10),
         Constraint::Min(0),
     ];
@@ -211,6 +213,13 @@ fn draw_entry_detail_pane(f: &mut Frame, app: &App, area: ratatui::layout::Rect)
                 Style::default().fg(Color::DarkGray)
             },
         )]),
+        Line::from(vec![
+            Span::styled("Type: ", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                format!("{} {}", e.icon, e.entry_type.label()),
+                Style::default().fg(Color::Cyan),
+            ),
+        ]),
         Line::from(""),
         Line::from(vec![
             Span::styled("Username: ", Style::default().fg(Color::Yellow)),

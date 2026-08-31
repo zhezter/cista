@@ -5,6 +5,37 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+/// The kind of credential an entry stores. Controls which icon is shown and
+/// shapes the default fields in the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum EntryType {
+    #[default]
+    Login,
+    Card,
+    Note,
+}
+
+impl EntryType {
+    /// Human-readable label.
+    pub fn label(self) -> &'static str {
+        match self {
+            EntryType::Login => "Login",
+            EntryType::Card => "Card",
+            EntryType::Note => "Note",
+        }
+    }
+
+    /// A representative emoji shown beside entries in the UI. When an entry has
+    /// its own `icon`, that takes precedence.
+    pub fn default_icon(self) -> &'static str {
+        match self {
+            EntryType::Login => "🔑",
+            EntryType::Card => "💳",
+            EntryType::Note => "📝",
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Entry {
     id: Uuid,
@@ -13,6 +44,10 @@ pub struct Entry {
     password: Secret<SecretString>,
     url: Option<String>,
     notes: Option<Secret<SecretString>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    icon: Option<String>,
+    #[serde(default)]
+    entry_type: EntryType,
     #[serde(default)]
     favorite: bool,
     created_at: OffsetDateTime,
@@ -39,6 +74,8 @@ impl Entry {
             password,
             url,
             notes: notes.map(|n| Secret::new(SecretString::from(n))),
+            icon: None,
+            entry_type: EntryType::Login,
             favorite: false,
             created_at: now,
             updated_at: now,
@@ -77,6 +114,24 @@ impl Entry {
 
     pub fn set_favorite(&mut self, favorite: bool) {
         self.favorite = favorite;
+    }
+
+    pub fn icon(&self) -> Option<&str> {
+        self.icon.as_deref()
+    }
+
+    pub fn set_icon(&mut self, icon: Option<String>) {
+        self.icon = icon.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        self.touch();
+    }
+
+    pub fn entry_type(&self) -> EntryType {
+        self.entry_type
+    }
+
+    pub fn set_entry_type(&mut self, entry_type: EntryType) {
+        self.entry_type = entry_type;
+        self.touch();
     }
 }
 

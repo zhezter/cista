@@ -10,7 +10,7 @@ use crate::screens::*;
 use crate::tasks::{self, PendingTask, TaskKind, TaskResult};
 use crate::widgets::*;
 use cista_core::config::Config;
-use cista_core::{SecretString, Vault};
+use cista_core::{EntryType, SecretString, Vault};
 use secrecy::{ExposeSecret, Secret};
 use zeroize::Zeroize;
 
@@ -142,6 +142,8 @@ pub struct EntryRow {
     pub url: Option<String>,
     pub notes: Option<String>,
     pub favorite: bool,
+    pub icon: String,
+    pub entry_type: EntryType,
     pub created_at: time::OffsetDateTime,
     pub updated_at: time::OffsetDateTime,
     pub health: cista_core::health::Health,
@@ -204,6 +206,8 @@ pub struct FormFields {
     pub password_confirm: String,
     pub url: String,
     pub notes: String,
+    pub icon: String,
+    pub entry_type: EntryType,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -572,7 +576,9 @@ impl App {
                 2 => &mut self.form_fields.password,
                 3 => &mut self.form_fields.password_confirm,
                 4 => &mut self.form_fields.url,
-                _ => &mut self.form_fields.notes,
+                5 => &mut self.form_fields.notes,
+                6 => &mut self.form_fields.icon,
+                _ => &mut self.form_fields.name,
             }),
             Screen::NewVault => Some(match self.new_vault_field_idx {
                 0 => &mut self.new_vault_fields.name,
@@ -931,11 +937,16 @@ impl App {
                     self.screen = Screen::EntryDetail;
                 }
             }
-            Screen::EntryForm | Screen::NewVault => {
-                self.handle_tab_next();
+            Screen::EntryForm => {
+                if self.form_field_idx == 7 {
+                    // Cycling the entry type selector field.
+                    self.cycle_entry_type();
+                } else {
+                    self.handle_tab_next();
+                }
             }
-            Screen::Generate => {
-                self.do_generate();
+            Screen::NewVault => {
+                self.handle_tab_next();
             }
             Screen::Locked => {
                 self.screen = Screen::Unlock;
@@ -943,6 +954,9 @@ impl App {
             }
             Screen::Confirm => {
                 self.confirm_yes();
+            }
+            Screen::Generate => {
+                self.do_generate();
             }
             _ => {}
         }
@@ -1013,6 +1027,11 @@ impl App {
                         .notes()
                         .map(|n| n.expose_secret().as_str().to_string()),
                     favorite: entry.is_favorite(),
+                    icon: entry
+                        .icon()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|| entry.entry_type().default_icon().to_string()),
+                    entry_type: entry.entry_type(),
                     created_at: entry.created_at(),
                     updated_at: entry.updated_at(),
                     health: healths[i].clone(),
@@ -1376,6 +1395,8 @@ impl App {
                                     .notes()
                                     .map(|n| n.expose_secret().as_str().to_string())
                                     .unwrap_or_default(),
+                                icon: entry.icon().unwrap_or("").to_string(),
+                                entry_type: entry.entry_type(),
                             };
                             self.form_field_idx = 0;
                             self.previous_screen = Some(Screen::EntryDetail);
@@ -1404,7 +1425,7 @@ impl App {
     fn handle_tab_next(&mut self) -> AppSignal {
         match self.screen {
             Screen::EntryForm => {
-                self.form_field_idx = (self.form_field_idx + 1) % 6;
+                self.form_field_idx = (self.form_field_idx + 1) % 8;
             }
             Screen::NewVault => {
                 self.new_vault_field_idx = (self.new_vault_field_idx + 1) % 3;
@@ -1417,7 +1438,7 @@ impl App {
     fn handle_tab_prev(&mut self) -> AppSignal {
         match self.screen {
             Screen::EntryForm => {
-                self.form_field_idx = (self.form_field_idx + 5) % 6;
+                self.form_field_idx = (self.form_field_idx + 7) % 8;
             }
             Screen::NewVault => {
                 self.new_vault_field_idx = (self.new_vault_field_idx + 2) % 3;
@@ -1425,6 +1446,17 @@ impl App {
             _ => {}
         }
         AppSignal::Continue
+    }
+
+    /// Cycle the entry type selector (Login → Card → Note → …) when pressed
+    /// while the type field is focused.
+    fn cycle_entry_type(&mut self) {
+        let next = match self.form_fields.entry_type {
+            EntryType::Login => EntryType::Card,
+            EntryType::Card => EntryType::Note,
+            EntryType::Note => EntryType::Login,
+        };
+        self.form_fields.entry_type = next;
     }
 
     fn handle_save(&mut self) -> AppSignal {
@@ -1504,6 +1536,8 @@ impl App {
         let username = self.form_fields.username.clone();
         let notes = self.form_fields.notes.clone();
         let url = self.form_fields.url.clone();
+        let icon = self.form_fields.icon.clone();
+        let entry_type = self.form_fields.entry_type;
         let password_raw = std::mem::take(&mut self.form_fields.password);
         let confirm_raw = std::mem::take(&mut self.form_fields.password_confirm);
 
@@ -1557,6 +1591,9 @@ impl App {
                         },
                     );
                     entry.map_err(anyhow::Error::from).map(|e| {
+                        let mut e = e;
+                        e.set_entry_type(entry_type);
+                        e.set_icon(Some(icon.clone()));
                         vault.add_entry(e);
                         vault
                     })
@@ -1584,6 +1621,8 @@ impl App {
                             } else {
                                 Some(notes.clone())
                             });
+                            entry.set_entry_type(entry_type);
+                            entry.set_icon(Some(icon.clone()));
                             Ok(vault)
                         } else {
                             Err(anyhow::anyhow!("Entry not found"))

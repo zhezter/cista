@@ -2,7 +2,7 @@ mod entry;
 mod secret_string;
 mod vault;
 
-pub use entry::Entry;
+pub use entry::{Entry, EntryType};
 pub use secret_string::SecretString;
 pub use vault::Vault;
 
@@ -173,5 +173,53 @@ mod tests {
         let sealed = vault.seal(b"pw").expect("seal");
         let opened = Vault::open(&sealed, b"pw").expect("open");
         assert!(opened.entries()[0].is_favorite());
+    }
+
+    #[test]
+    fn icon_and_type_default_for_old_entries() {
+        // Vaults written before `icon`/`entry_type` existed must deserialize
+        // with icon == None and entry_type == Login.
+        let old_json = br#"{
+            "version":1,
+            "entries":[
+                {
+                    "id":"11111111-1111-1111-1111-111111111111",
+                    "name":"github",
+                    "username":null,
+                    "password":"hunter2",
+                    "url":null,
+                    "notes":null,
+                    "created_at":[2024,1,0,0,0,0,0,0,0],
+                    "updated_at":[2024,1,0,0,0,0,0,0,0]
+                }
+            ]
+        }"#;
+        let vault: Vault = serde_json::from_slice(old_json).expect("old vault deserializes");
+        assert_eq!(vault.entries().len(), 1);
+        assert!(vault.entries()[0].icon().is_none());
+        assert_eq!(vault.entries()[0].entry_type(), EntryType::Login);
+    }
+
+    #[test]
+    fn icon_and_type_round_trips() {
+        let mut vault = Vault::new();
+        let mut entry = Entry::new(
+            "amex".to_string(),
+            None,
+            Secret::new(SecretString::from("4111".to_string())),
+            None,
+            None,
+        )
+        .expect("valid entry");
+        entry.set_entry_type(EntryType::Card);
+        entry.set_icon(Some("💳".to_string()));
+        vault.add_entry(entry);
+
+        let sealed = vault.seal(b"pw").expect("seal");
+        let opened = Vault::open(&sealed, b"pw").expect("open");
+        let e = &opened.entries()[0];
+        assert_eq!(e.entry_type(), EntryType::Card);
+        assert_eq!(e.icon(), Some("💳"));
+        assert_eq!(e.entry_type().label(), "Card");
     }
 }
