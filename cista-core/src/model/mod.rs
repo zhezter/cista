@@ -131,10 +131,10 @@ mod tests {
     }
 
     #[test]
-    fn favorite_defaults_to_false_for_old_entries() {
-        // A vault written before the `favorite` field existed must deserialize
-        // with favorite == false, so old vaults keep opening. The JSON uses the
-        // actual serialized format (uuid bytes + OffsetDateTime component array).
+    fn legacy_ui_metadata_fields_are_ignored() {
+        // Vaults written when `favorite`/`icon`/`entry_type` lived on the Entry
+        // itself must keep opening: those fields are now plaintext UI metadata
+        // stored separately, so serde ignores the extra keys here.
         let old_json = br#"{
             "version":1,
             "entries":[
@@ -145,6 +145,9 @@ mod tests {
                     "password":"hunter2",
                     "url":null,
                     "notes":null,
+                    "favorite":true,
+                    "icon":"star",
+                    "entry_type":"Card",
                     "created_at":[2024,1,0,0,0,0,0,0,0],
                     "updated_at":[2024,1,0,0,0,0,0,0,0]
                 }
@@ -152,74 +155,6 @@ mod tests {
         }"#;
         let vault: Vault = serde_json::from_slice(old_json).expect("old vault deserializes");
         assert_eq!(vault.entries().len(), 1);
-        assert!(!vault.entries()[0].is_favorite());
-    }
-
-    #[test]
-    fn favorite_round_trips() {
-        let mut vault = Vault::new();
-        let mut entry = Entry::new(
-            "github".to_string(),
-            None,
-            Secret::new(SecretString::from("hunter2".to_string())),
-            None,
-            None,
-        )
-        .expect("valid entry");
-        entry.set_favorite(true);
-        assert!(entry.is_favorite());
-        vault.add_entry(entry);
-
-        let sealed = vault.seal(b"pw").expect("seal");
-        let opened = Vault::open(&sealed, b"pw").expect("open");
-        assert!(opened.entries()[0].is_favorite());
-    }
-
-    #[test]
-    fn icon_and_type_default_for_old_entries() {
-        // Vaults written before `icon`/`entry_type` existed must deserialize
-        // with icon == None and entry_type == Login.
-        let old_json = br#"{
-            "version":1,
-            "entries":[
-                {
-                    "id":"11111111-1111-1111-1111-111111111111",
-                    "name":"github",
-                    "username":null,
-                    "password":"hunter2",
-                    "url":null,
-                    "notes":null,
-                    "created_at":[2024,1,0,0,0,0,0,0,0],
-                    "updated_at":[2024,1,0,0,0,0,0,0,0]
-                }
-            ]
-        }"#;
-        let vault: Vault = serde_json::from_slice(old_json).expect("old vault deserializes");
-        assert_eq!(vault.entries().len(), 1);
-        assert!(vault.entries()[0].icon().is_none());
-        assert_eq!(vault.entries()[0].entry_type(), EntryType::Login);
-    }
-
-    #[test]
-    fn icon_and_type_round_trips() {
-        let mut vault = Vault::new();
-        let mut entry = Entry::new(
-            "amex".to_string(),
-            None,
-            Secret::new(SecretString::from("4111".to_string())),
-            None,
-            None,
-        )
-        .expect("valid entry");
-        entry.set_entry_type(EntryType::Card);
-        entry.set_icon(Some("💳".to_string()));
-        vault.add_entry(entry);
-
-        let sealed = vault.seal(b"pw").expect("seal");
-        let opened = Vault::open(&sealed, b"pw").expect("open");
-        let e = &opened.entries()[0];
-        assert_eq!(e.entry_type(), EntryType::Card);
-        assert_eq!(e.icon(), Some("💳"));
-        assert_eq!(e.entry_type().label(), "Card");
+        assert_eq!(vault.entries()[0].name(), "github");
     }
 }

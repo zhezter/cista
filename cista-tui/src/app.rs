@@ -66,6 +66,7 @@ pub struct App {
     // Session (when unlocked)
     pub vault_path: Option<PathBuf>,
     pub vault: Option<Vault>,
+    pub ui_state: cista_core::UiState,
     pub master_password: Option<Secret<SecretString>>,
     pub locked: bool,
     pub last_activity: Instant,
@@ -300,6 +301,7 @@ impl App {
             unlock_mode: UnlockMode::Open,
             vault_path: None,
             vault: None,
+            ui_state: cista_core::UiState::new(),
             master_password: None,
             locked: false,
             last_activity: Instant::now(),
@@ -426,7 +428,8 @@ impl App {
                     result: Ok(vault),
                 } => {
                     let _ = cista_core::config::record_opened(&path);
-                    self.vault_path = Some(path);
+                    self.vault_path = Some(path.clone());
+                    self.ui_state = cista_core::UiState::load_for_vault(&path);
                     self.vault = Some(vault);
                     self.master_password = Some(password);
                     self.locked = false;
@@ -480,6 +483,9 @@ impl App {
             TaskKind::DeleteVault => match result {
                 TaskResult::DeleteVault { result: Ok(()) } => {
                     self.unlock_mode = UnlockMode::Open;
+                    if let Some(path) = &self.vault_path {
+                        cista_core::UiState::remove_for_vault(path);
+                    }
                     self.load_vaults();
                     self.screen = Screen::VaultList;
                     self.set_status("Vault deleted");
@@ -698,6 +704,10 @@ impl App {
     fn lock_vault(&mut self) {
         self.vault = None;
         self.master_password = None;
+        self.vault_path = None;
+        self.ui_state = cista_core::UiState::new();
+        self.all_entries.clear();
+        self.entries.clear();
         self.locked = true;
         self.screen = Screen::Locked;
         self.in_search = false;
@@ -807,8 +817,8 @@ impl App {
         AppSignal::Continue
     }
 
-    /// Toggle the favourite flag on the selected entry ('f'). Updates both the
-    /// in-memory row and the vault, then persists in the background.
+    /// Toggle the favourite flag on the selected entry ('f'). Updates the
+    /// in-memory rows and the plaintext UI state, then persists metadata.
     fn handle_toggle_favorite(&mut self) -> AppSignal {
         if self.screen != Screen::EntryList {
             return AppSignal::Continue;
@@ -817,12 +827,7 @@ impl App {
             return AppSignal::Continue;
         };
         let entry_id = self.entries[idx].id;
-        let new_val = !self
-            .all_entries
-            .iter()
-            .find(|e| e.id == entry_id)
-            .map(|e| e.favorite)
-            .unwrap_or(false);
+        let new_val = self.ui_state.toggle_favourite(entry_id);
 
         // Update both the pristine list and the visible list.
         for e in self.all_entries.iter_mut() {
@@ -836,13 +841,8 @@ impl App {
             }
         }
 
-        // Persist to the vault and trigger a background save.
-        if let Some(vault) = &mut self.vault {
-            if let Some(entry) = vault.find_by_id_mut(entry_id) {
-                entry.set_favorite(new_val);
-                self.start_save_task(TaskKind::SaveEntryEdit);
-            }
-        }
+        // Persist the plaintext metadata (fast, no re-seal).
+        self.save_ui_state();
 
         // Keep favorites at the top.
         self.recompute_filtered_entries();
@@ -852,6 +852,14 @@ impl App {
             "Removed from favourites"
         });
         AppSignal::Continue
+    }
+
+    /// Persist the current UI state to the XDG state directory. Safe to call
+    /// even when no vault is open (it becomes a no-op).
+    fn save_ui_state(&self) {
+        if let Some(path) = &self.vault_path {
+            let _ = self.ui_state.save_for_vault(path);
+        }
     }
 
     fn toggle_gen_option(&mut self, option: GenOption) {
@@ -1026,12 +1034,9 @@ impl App {
                     notes: entry
                         .notes()
                         .map(|n| n.expose_secret().as_str().to_string()),
-                    favorite: entry.is_favorite(),
-                    icon: entry
-                        .icon()
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| entry.entry_type().default_icon().to_string()),
-                    entry_type: entry.entry_type(),
+                    favorite: self.ui_state.is_favourite(entry.id()),
+                    icon: self.ui_state.display_icon(entry.id()),
+                    entry_type: self.ui_state.entry_type(entry.id()),
                     created_at: entry.created_at(),
                     updated_at: entry.updated_at(),
                     health: healths[i].clone(),
@@ -1395,8 +1400,8 @@ impl App {
                                     .notes()
                                     .map(|n| n.expose_secret().as_str().to_string())
                                     .unwrap_or_default(),
-                                icon: entry.icon().unwrap_or("").to_string(),
-                                entry_type: entry.entry_type(),
+                                icon: self.ui_state.icon(entry.id()).unwrap_or("").to_string(),
+                                entry_type: self.ui_state.entry_type(entry.id()),
                             };
                             self.form_field_idx = 0;
                             self.previous_screen = Some(Screen::EntryDetail);
@@ -1479,6 +1484,8 @@ impl App {
                         if let Some(entry) = self.entries.get(idx).cloned() {
                             if let Some(vault) = &mut self.vault {
                                 if vault.remove_by_id(entry.id).is_ok() {
+                                    self.ui_state.remove_entry(entry.id);
+                                    self.save_ui_state();
                                     self.load_entries();
                                     self.start_save_task(TaskKind::SaveEntryDelete);
                                 }
@@ -1571,7 +1578,7 @@ impl App {
         if let Some(vault) = &mut self.vault {
             let result: anyhow::Result<&mut Vault> = match self.form_mode {
                 FormMode::Add => {
-                    let entry = Entry::new(
+                    let created = Entry::new(
                         name.trim().to_string(),
                         if username.is_empty() {
                             None
@@ -1589,14 +1596,18 @@ impl App {
                         } else {
                             Some(notes.clone())
                         },
-                    );
-                    entry.map_err(anyhow::Error::from).map(|e| {
-                        let mut e = e;
-                        e.set_entry_type(entry_type);
-                        e.set_icon(Some(icon.clone()));
-                        vault.add_entry(e);
-                        vault
-                    })
+                    )
+                    .map_err(anyhow::Error::from);
+                    match created {
+                        Ok(e) => {
+                            let id = e.id();
+                            vault.add_entry(e);
+                            self.ui_state.set_entry_type(id, entry_type);
+                            self.ui_state.set_icon(id, Some(icon.clone()));
+                            Ok(vault)
+                        }
+                        Err(err) => Err(err),
+                    }
                 }
                 FormMode::Edit => {
                     if let Some(idx) = self.detail_entry_idx {
@@ -1621,8 +1632,8 @@ impl App {
                             } else {
                                 Some(notes.clone())
                             });
-                            entry.set_entry_type(entry_type);
-                            entry.set_icon(Some(icon.clone()));
+                            self.ui_state.set_entry_type(entry_id, entry_type);
+                            self.ui_state.set_icon(entry_id, Some(icon.clone()));
                             Ok(vault)
                         } else {
                             Err(anyhow::anyhow!("Entry not found"))
@@ -1635,6 +1646,7 @@ impl App {
 
             match result {
                 Ok(_) => {
+                    self.save_ui_state();
                     let kind = match self.form_mode {
                         FormMode::Add => TaskKind::SaveEntryAdd,
                         FormMode::Edit => TaskKind::SaveEntryEdit,

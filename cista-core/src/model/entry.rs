@@ -44,12 +44,6 @@ pub struct Entry {
     password: Secret<SecretString>,
     url: Option<String>,
     notes: Option<Secret<SecretString>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    icon: Option<String>,
-    #[serde(default)]
-    entry_type: EntryType,
-    #[serde(default)]
-    favorite: bool,
     created_at: OffsetDateTime,
     updated_at: OffsetDateTime,
 }
@@ -74,9 +68,6 @@ impl Entry {
             password,
             url,
             notes: notes.map(|n| Secret::new(SecretString::from(n))),
-            icon: None,
-            entry_type: EntryType::Login,
-            favorite: false,
             created_at: now,
             updated_at: now,
         })
@@ -106,32 +97,6 @@ impl Entry {
 
     pub fn updated_at(&self) -> OffsetDateTime {
         self.updated_at
-    }
-
-    pub fn is_favorite(&self) -> bool {
-        self.favorite
-    }
-
-    pub fn set_favorite(&mut self, favorite: bool) {
-        self.favorite = favorite;
-    }
-
-    pub fn icon(&self) -> Option<&str> {
-        self.icon.as_deref()
-    }
-
-    pub fn set_icon(&mut self, icon: Option<String>) {
-        self.icon = icon.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-        self.touch();
-    }
-
-    pub fn entry_type(&self) -> EntryType {
-        self.entry_type
-    }
-
-    pub fn set_entry_type(&mut self, entry_type: EntryType) {
-        self.entry_type = entry_type;
-        self.touch();
     }
 }
 

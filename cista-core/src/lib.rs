@@ -11,8 +11,10 @@ pub mod model;
 pub mod password_gen;
 pub mod paths;
 pub mod storage;
+pub mod ui_state;
 
 mod serialization;
 
 pub use error::{CoreError, CoreResult};
 pub use model::{Entry, EntryType, SecretString, Vault};
+pub use ui_state::UiState;
