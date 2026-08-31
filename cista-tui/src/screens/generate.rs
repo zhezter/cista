@@ -114,11 +114,14 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
     }
 
     // Footer
-    let footer = Paragraph::new(
-        "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Esc] Back",
-    )
-    .style(Style::default().fg(Color::DarkGray))
-    .alignment(Alignment::Center)
-    .block(Block::default().borders(Borders::TOP));
+    let footer_text = if app.gen_from_form {
+        "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Ctrl+g] Apply to form  [Esc] Cancel"
+    } else {
+        "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Esc] Back"
+    };
+    let footer = Paragraph::new(footer_text)
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[3]);
 }

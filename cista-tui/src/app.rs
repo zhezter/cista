@@ -95,6 +95,10 @@ pub struct App {
     pub gen_policy: GenPolicy,
     pub gen_selected: usize,
     pub gen_result: Option<String>,
+    /// True when the generator was opened from the entry form. In that mode a
+    /// second Ctrl+g (or Enter after generating) drops the generated password
+    /// into the form's password field and returns to the form.
+    pub gen_from_form: bool,
 
     // Confirm dialog
     pub confirm_message: String,
@@ -302,6 +306,7 @@ impl App {
             gen_policy: GenPolicy::default(),
             gen_selected: 0,
             gen_result: None,
+            gen_from_form: false,
             confirm_message: String::new(),
             confirm_on_yes: None,
             confirm_password: String::new(),
@@ -1064,6 +1069,7 @@ impl App {
             Screen::Generate => {
                 self.screen = self.previous_screen.unwrap_or(Screen::VaultList);
                 self.gen_result = None;
+                self.gen_from_form = false;
             }
             Screen::Locked => {
                 self.screen = Screen::Unlock;
@@ -1122,9 +1128,26 @@ impl App {
 
     fn handle_generate(&mut self) -> AppSignal {
         if self.screen == Screen::Generate {
+            // Second Ctrl+g while the generator is open: if it was opened from
+            // the entry form, drop the generated password into the form and go
+            // back. Otherwise (standalone generator) there is nothing else to
+            // do on a second activate.
+            if self.gen_from_form {
+                if let Some(pwd) = self.gen_result.clone() {
+                    self.form_fields.password = pwd;
+                    self.form_fields.password_confirm = self.form_fields.password.clone();
+                    self.gen_from_form = false;
+                    self.gen_result = None;
+                    self.screen = self.previous_screen.unwrap_or(Screen::EntryForm);
+                    self.set_status("Generated password applied to form");
+                } else {
+                    self.set_error("Generate a password first");
+                }
+            }
             return AppSignal::Continue;
         }
         self.previous_screen = Some(self.screen);
+        self.gen_from_form = self.screen == Screen::EntryForm;
         self.screen = Screen::Generate;
         self.gen_policy = GenPolicy::default();
         self.gen_result = None;

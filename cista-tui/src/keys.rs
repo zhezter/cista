@@ -66,7 +66,7 @@ impl Default for KeyBindings {
             back: kb(Esc, KeyModifiers::NONE),
             search: kb(Char('/'), KeyModifiers::NONE),
             add: kb(Char('a'), KeyModifiers::NONE),
-            generate: kb(Char('g'), KeyModifiers::NONE),
+            generate: kb(Char('g'), KeyModifiers::CONTROL),
             delete: kb(Char('d'), KeyModifiers::NONE),
             copy_password: kb(Char('c'), KeyModifiers::NONE),
             copy_username: kb(Char('u'), KeyModifiers::NONE),
