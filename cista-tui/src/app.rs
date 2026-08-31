@@ -718,15 +718,80 @@ impl App {
         }
     }
 
+    /// Dispatch a key action to the active screen. Centralizes the
+    /// `match self.screen` that used to be repeated across every `handle_*`,
+    /// so each screen's behaviour lives in one `update_*` method.
     fn handle_action(&mut self, action: Action) -> AppSignal {
+        match self.screen {
+            Screen::VaultList => self.update_vault_list(action),
+            Screen::Unlock => self.update_unlock(action),
+            Screen::EntryList => self.update_entry_list(action),
+            Screen::EntryDetail => self.update_entry_detail(action),
+            Screen::EntryForm => self.update_entry_form(action),
+            Screen::NewVault => self.update_new_vault(action),
+            Screen::Generate => self.update_generate(action),
+            Screen::Locked => self.update_locked(action),
+            Screen::Confirm => self.update_confirm(action),
+            Screen::Help => self.update_help(action),
+        }
+    }
+
+    fn update_vault_list(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Up => {
+                if self.vault_list.selected > 0 {
+                    self.vault_list.selected -= 1;
+                }
+                AppSignal::Continue
+            }
+            Action::Down => {
+                if self.vault_list.selected + 1 < self.vault_list.vaults.len() {
+                    self.vault_list.selected += 1;
+                }
+                AppSignal::Continue
+            }
+            Action::Enter => self.handle_enter(),
+            Action::Back => self.handle_back(),
+            Action::NewVault => self.handle_new_vault(),
+            Action::Delete => self.handle_delete(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_unlock(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Enter => self.handle_enter(),
+            Action::Back => self.handle_back(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_entry_list(&mut self, action: Action) -> AppSignal {
         match action {
             Action::Quit => AppSignal::Quit,
             Action::Help => self.handle_help(),
             Action::Lock => self.handle_lock(),
-            Action::Up => self.handle_up(),
-            Action::Down => self.handle_down(),
-            Action::Left => self.handle_left(),
-            Action::Right => self.handle_right(),
+            Action::Generate => self.handle_generate(),
+            Action::Up => {
+                if self.entry_list.selected > 0 {
+                    self.entry_list.selected -= 1;
+                    self.adjust_page();
+                }
+                AppSignal::Continue
+            }
+            Action::Down => {
+                if self.entry_list.selected + 1 < self.entry_list.entries.len() {
+                    self.entry_list.selected += 1;
+                    self.adjust_page();
+                }
+                AppSignal::Continue
+            }
             Action::PageUp => self.handle_page_up(),
             Action::PageDown => self.handle_page_down(),
             Action::Home => self.handle_home(),
@@ -735,20 +800,139 @@ impl App {
             Action::Back => self.handle_back(),
             Action::Search => self.handle_search(),
             Action::Add => self.handle_add(),
+            Action::Delete => self.handle_delete(),
+            Action::CopyPassword => self.handle_copy_password(),
+            Action::CopyUsername => self.handle_copy_username(),
+            Action::CopyUrl => self.handle_copy_url(),
+            Action::Sort => self.handle_sort(),
+            Action::ToggleFavorite => self.handle_toggle_favorite(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_entry_detail(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Lock => self.handle_lock(),
             Action::Generate => self.handle_generate(),
+            Action::Enter => self.handle_enter(),
+            Action::Back => self.handle_back(),
             Action::Delete => self.handle_delete(),
             Action::CopyPassword => self.handle_copy_password(),
             Action::CopyUsername => self.handle_copy_username(),
             Action::CopyUrl => self.handle_copy_url(),
             Action::Edit => self.handle_edit(),
             Action::Reveal => self.handle_reveal(),
-            Action::NewVault => self.handle_new_vault(),
-            Action::Reroll => self.handle_reroll(),
-            Action::Sort => self.handle_sort(),
-            Action::ToggleFavorite => self.handle_toggle_favorite(),
-            Action::TabNext => self.handle_tab_next(),
-            Action::TabPrev => self.handle_tab_prev(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_entry_form(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Up | Action::TabPrev => self.handle_tab_prev(),
+            Action::Down | Action::TabNext => self.handle_tab_next(),
+            Action::Enter => self.handle_enter(),
+            Action::Back => self.handle_back(),
             Action::Save => self.handle_save(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_new_vault(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Up | Action::TabPrev => self.handle_tab_prev(),
+            Action::Down | Action::TabNext => self.handle_tab_next(),
+            Action::Enter => self.handle_enter(),
+            Action::Back => self.handle_back(),
+            Action::Save => self.handle_save(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_generate(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Up => {
+                self.generate.selected = self.generate.selected.saturating_sub(1);
+                AppSignal::Continue
+            }
+            Action::Down => {
+                self.generate.selected = (self.generate.selected + 1).min(GenOption::ALL.len() - 1);
+                AppSignal::Continue
+            }
+            Action::Left => self.handle_left(),
+            Action::Right => self.handle_right(),
+            Action::Enter => self.handle_enter(),
+            Action::Back => self.handle_back(),
+            Action::Reroll => self.handle_reroll(),
+            Action::Reveal => self.handle_reveal(),
+            Action::CopyPassword => self.handle_copy_password(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_locked(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Enter => self.handle_enter(),
+            Action::Back => self.handle_back(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_confirm(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Enter => self.handle_enter(),
+            Action::Back => self.handle_back(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn update_help(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Up => {
+                self.help.scroll = self.help.scroll.saturating_sub(1);
+                AppSignal::Continue
+            }
+            Action::Down => {
+                self.help.scroll = self.help.scroll.saturating_add(1);
+                AppSignal::Continue
+            }
+            Action::PageUp => {
+                self.help.scroll = self.help.scroll.saturating_sub(15);
+                AppSignal::Continue
+            }
+            Action::PageDown => {
+                self.help.scroll = self.help.scroll.saturating_add(15);
+                AppSignal::Continue
+            }
+            Action::Home => {
+                self.help.scroll = 0;
+                AppSignal::Continue
+            }
+            Action::End => {
+                self.help.scroll = u16::MAX;
+                AppSignal::Continue
+            }
+            Action::Back => self.handle_back(),
+            _ => AppSignal::Continue,
         }
     }
 
@@ -783,59 +967,6 @@ impl App {
         self.reset_form_fields();
     }
 
-    fn handle_up(&mut self) -> AppSignal {
-        match self.screen {
-            Screen::VaultList => {
-                if self.vault_list.selected > 0 {
-                    self.vault_list.selected -= 1;
-                }
-            }
-            Screen::EntryList => {
-                if self.entry_list.selected > 0 {
-                    self.entry_list.selected -= 1;
-                    self.adjust_page();
-                }
-            }
-            Screen::EntryForm | Screen::NewVault => {
-                self.handle_tab_prev();
-            }
-            Screen::Generate => {
-                self.generate.selected = self.generate.selected.saturating_sub(1);
-            }
-            Screen::Help if self.help.scroll > 0 => {
-                self.help.scroll -= 1;
-            }
-            _ => {}
-        }
-        AppSignal::Continue
-    }
-
-    fn handle_down(&mut self) -> AppSignal {
-        match self.screen {
-            Screen::VaultList => {
-                if self.vault_list.selected + 1 < self.vault_list.vaults.len() {
-                    self.vault_list.selected += 1;
-                }
-            }
-            Screen::EntryList => {
-                if self.entry_list.selected + 1 < self.entry_list.entries.len() {
-                    self.entry_list.selected += 1;
-                    self.adjust_page();
-                }
-            }
-            Screen::EntryForm | Screen::NewVault => {
-                self.handle_tab_next();
-            }
-            Screen::Generate => {
-                self.generate.selected = (self.generate.selected + 1).min(GenOption::ALL.len() - 1);
-            }
-            Screen::Help => {
-                self.help.scroll = self.help.scroll.saturating_add(1);
-            }
-            _ => {}
-        }
-        AppSignal::Continue
-    }
 
     /// Left/Right move across the focused generate option. For `Length` the
     /// value changes; for the boolean categories it toggles the state.
