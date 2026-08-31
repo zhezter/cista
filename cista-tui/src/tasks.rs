@@ -22,6 +22,7 @@ pub enum TaskKind {
     SaveEntryAdd,
     SaveEntryEdit,
     SaveEntryDelete,
+    DeleteVault,
 }
 
 impl TaskKind {
@@ -32,6 +33,7 @@ impl TaskKind {
             TaskKind::SaveEntryAdd | TaskKind::SaveEntryEdit | TaskKind::SaveEntryDelete => {
                 "Saving vault…"
             }
+            TaskKind::DeleteVault => "Deleting vault…",
         }
     }
 }
@@ -49,6 +51,12 @@ pub enum TaskResult {
         result: Result<(), String>,
     },
     SaveVault {
+        result: Result<(), String>,
+    },
+    /// Vault deletion: verifies the master password against the file, then
+    /// removes it. Fails if the password is wrong or the path cannot be
+    /// removed.
+    DeleteVault {
         result: Result<(), String>,
     },
     /// The thread died before sending anything (only possible on a bug/panic).
@@ -103,6 +111,25 @@ pub fn spawn_save_vault(
     std::thread::spawn(move || {
         let result = vault.save(&path, &password).map_err(|e| e.to_string());
         let _ = tx.send(TaskResult::SaveVault { result });
+    });
+    rx
+}
+
+/// Verifies the master password against the vault file and, only if it is
+/// correct, removes the file. Runs on a worker thread because verification,
+/// like unlocking, is Argon2-heavy.
+pub fn spawn_delete_vault(path: PathBuf, password: Secret<SecretString>) -> Receiver<TaskResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = load_vault_from_path(&path, password.expose_secret().as_str().as_bytes())
+            .map(|_| std::fs::remove_file(&path))
+            .map_err(|e| e.to_string());
+        let result = match result {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e.to_string()),
+            Err(e) => Err(e),
+        };
+        let _ = tx.send(TaskResult::DeleteVault { result });
     });
     rx
 }

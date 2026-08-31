@@ -99,6 +99,9 @@ pub struct App {
     // Confirm dialog
     pub confirm_message: String,
     pub confirm_on_yes: Option<ConfirmAction>,
+    /// Master password typed in the confirm dialog. Only used (and required)
+    /// when deleting a vault, to verify the password before removing the file.
+    pub confirm_password: String,
 
     // Help
     pub help_scroll: u16,
@@ -301,6 +304,7 @@ impl App {
             gen_result: None,
             confirm_message: String::new(),
             confirm_on_yes: None,
+            confirm_password: String::new(),
             help_scroll: 0,
             mapper,
             status_message: None,
@@ -452,6 +456,21 @@ impl App {
                     _ => {}
                 }
             }
+            TaskKind::DeleteVault => match result {
+                TaskResult::DeleteVault { result: Ok(()) } => {
+                    self.load_vaults();
+                    self.screen = Screen::VaultList;
+                    self.set_status("Vault deleted");
+                }
+                TaskResult::DeleteVault { result: Err(_) } => {
+                    self.set_error("Invalid master password");
+                    self.screen = Screen::Confirm;
+                    self.confirm_password.clear();
+                    self.detail_entry_idx = None;
+                    self.show_password = false;
+                }
+                _ => {}
+            },
         }
     }
 
@@ -544,6 +563,9 @@ impl App {
                 1 => &mut self.new_vault_fields.password,
                 _ => &mut self.new_vault_fields.confirm,
             }),
+            Screen::Confirm if self.confirm_on_yes == Some(ConfirmAction::DeleteVault) => {
+                Some(&mut self.confirm_password)
+            }
             _ => None,
         }
     }
@@ -854,7 +876,13 @@ impl App {
                 self.unlock_password.clear();
             }
             Screen::Confirm => {
-                self.confirm_yes();
+                if self.confirm_on_yes == Some(ConfirmAction::DeleteVault)
+                    && self.confirm_password.is_empty()
+                {
+                    self.set_error("Enter the master password to confirm");
+                } else {
+                    self.confirm_yes();
+                }
             }
             _ => {}
         }
@@ -1044,6 +1072,7 @@ impl App {
             Screen::Confirm => {
                 self.screen = self.previous_screen.unwrap_or(Screen::EntryList);
                 self.confirm_on_yes = None;
+                self.confirm_password.zeroize();
             }
             Screen::Help => {
                 self.screen = self.previous_screen.unwrap_or(Screen::VaultList);
@@ -1115,7 +1144,9 @@ impl App {
         match self.screen {
             Screen::VaultList => {
                 if let Some(vault) = self.vaults.get(self.vault_list_selected) {
-                    self.confirm_message = format!("Delete vault '{}'?", vault.name);
+                    self.confirm_message =
+                        format!("Delete vault '{}'?\nMaster password:", vault.name);
+                    self.confirm_password.clear();
                     self.confirm_on_yes = Some(ConfirmAction::DeleteVault);
                     self.previous_screen = Some(Screen::VaultList);
                     self.screen = Screen::Confirm;
@@ -1317,9 +1348,16 @@ impl App {
                 }
                 ConfirmAction::DeleteVault => {
                     if let Some(vault) = self.vaults.get(self.vault_list_selected) {
-                        let _ = std::fs::remove_file(&vault.path);
-                        self.load_vaults();
-                        self.set_status("Vault deleted");
+                        use secrecy::Secret;
+                        let password = Secret::new(SecretString::from(std::mem::take(
+                            &mut self.confirm_password,
+                        )));
+                        self.pending = Some(PendingTask {
+                            kind: TaskKind::DeleteVault,
+                            started: Instant::now(),
+                            rx: crate::tasks::spawn_delete_vault(vault.path.clone(), password),
+                        });
+                        return;
                     }
                 }
             }
