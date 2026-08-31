@@ -1,9 +1,12 @@
 //! Password health assessment used for the vault "health check".
 //!
 //! This is a lightweight, offline heuristic (no network, no keylogging, no
-//! third-party strength trainer). It scores a password 0..=100 based on
-//! length, character-class variety, how many other entries reuse the same
-//! password, and how old the password is.
+//! third-party strength trainer). It uses [zxcvbn]'s entropy estimate to score
+//! the intrinsic strength of a password, then applies two contextual
+//! penalties that zxcvbn cannot know about: how many other entries reuse the
+//! same password, and how old the password is.
+
+use zxcvbn::zxcvbn;
 
 /// Result of assessing a single password.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,39 +17,6 @@ pub struct Health {
     pub used_in: u32,
     /// Short human-readable reason explaining the score.
     pub reason: String,
-}
-
-/// Categories a password may draw from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Category {
-    Lower,
-    Upper,
-    Digit,
-    Symbol,
-    Other,
-}
-
-fn categorize(c: char) -> Category {
-    if c.is_ascii_lowercase() {
-        Category::Lower
-    } else if c.is_ascii_uppercase() {
-        Category::Upper
-    } else if c.is_ascii_digit() {
-        Category::Digit
-    } else if c.is_ascii_alphanumeric() {
-        Category::Other
-    } else {
-        Category::Symbol
-    }
-}
-
-/// Number of distinct ASCII categories present in `password`.
-fn variety(password: &str) -> usize {
-    let mut seen = std::collections::HashSet::new();
-    for c in password.chars() {
-        seen.insert(categorize(c));
-    }
-    seen.len()
 }
 
 /// Bulk helper: counts how many entries share each password, then produces
@@ -75,32 +45,18 @@ where
 /// Scores a single password. `used_in` is how many vault entries share it;
 /// `age_days` is how many days the password has gone unchanged.
 pub fn assess(password: &str, used_in: u32, age_days: i64) -> Health {
-    let mut score: i64 = 100;
+    let entropy = zxcvbn(password, &[]);
+
+    // zxcvbn reports the order of magnitude of estimated guesses. Anything at
+    // or beyond ~10^12 guesses is effectively un-crackable offline, so cap the
+    // scale there and map [0, 12] -> [0, 100]. "a" sits well below 10^3, so a
+    // single character scores almost zero instead of the old heuristic's 45.
+    let base = (entropy.guesses_log10().clamp(0.0, 12.0) / 12.0 * 100.0).round() as i64;
+
+    let mut score = base;
     let mut reason: Option<String> = None;
-    let len = password.chars().count();
-    let var = variety(password);
 
-    // Most salient finding wins; checks run strongest -> weakest so the first
-    // one that fires becomes the reason.
-    if matching_common(password) {
-        score -= 40;
-        reason = Some("Common or easily guessed password".to_string());
-    } else if len < 8 {
-        score -= 35;
-        reason = Some("Too short (fewer than 8 characters)".to_string());
-    } else if len < 12 {
-        score -= 15;
-        reason = Some("On the short side (fewer than 12 characters)".to_string());
-    }
-
-    if var <= 1 {
-        score -= 20;
-        reason.get_or_insert("Uses only one character class".to_string());
-    } else if var == 2 {
-        score -= 8;
-        reason.get_or_insert("Uses only two character classes".to_string());
-    }
-
+    // Contextual penalties zxcvbn has no way to know about.
     if used_in > 1 {
         score -= 25 * (used_in as i64 - 1);
         reason = Some(format!("Reused in {used_in} entries"));
@@ -118,31 +74,28 @@ pub fn assess(password: &str, used_in: u32, age_days: i64) -> Health {
         reason.get_or_insert("Getting old (unchanged for 6+ months)".to_string());
     }
 
+    // When the password itself is weak, prefer zxcvbn's targeted feedback over
+    // the generic contextual reasons.
+    if reason.is_none() && entropy.score() as u8 <= 2 {
+        if let Some(feedback) = entropy.feedback() {
+            let mut hints: Vec<String> = feedback
+                .suggestions()
+                .iter()
+                .map(|s| s.to_string())
+                .collect();
+            if let Some(warning) = feedback.warning() {
+                hints.insert(0, warning.to_string());
+            }
+            reason = Some(hints.join("; "));
+        }
+    }
+
     let score = score.clamp(0, 100) as u8;
     Health {
         score,
         used_in,
         reason: reason.unwrap_or_else(|| "Strong".to_string()),
     }
-}
-
-/// Cheap check against a small set of extremely common passwords.
-fn matching_common(password: &str) -> bool {
-    matches!(
-        password,
-        "123456"
-            | "password"
-            | "123456789"
-            | "qwerty"
-            | "abc123"
-            | "111111"
-            | "12345678"
-            | "letmein"
-            | "iloveyou"
-            | "admin"
-            | "welcome"
-            | "1234567890"
-    )
 }
 
 #[cfg(test)]
@@ -157,6 +110,12 @@ mod tests {
     }
 
     #[test]
+    fn single_char_password_scores_near_zero() {
+        let h = assess("a", 1, 0);
+        assert!(h.score <= 10, "single char scored {}", h.score);
+    }
+
+    #[test]
     fn reused_password_flags_reuse() {
         let h = assess("Str0ng-Passw0rd!", 3, 0);
         assert_ne!(h.reason, "Strong");
@@ -168,7 +127,7 @@ mod tests {
     fn strong_unique_fresh_password_scores_high() {
         let h = assess("K9!pqRz2@#mX72wL", 1, 30);
         assert_eq!(h.reason, "Strong");
-        assert!(h.score >= 90);
+        assert!(h.score >= 90, "strong password scored {}", h.score);
     }
 
     #[test]
@@ -179,9 +138,9 @@ mod tests {
     }
 
     #[test]
-    fn single_class_deduction_applies() {
+    fn repeated_pattern_scores_low() {
         let h = assess("aaaaaaaaaaaa", 1, 0);
-        assert!(h.reason.contains("one character class"));
+        assert!(h.score < 60, "repeated pattern scored {}", h.score);
     }
 
     #[test]
