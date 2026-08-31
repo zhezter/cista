@@ -79,10 +79,11 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
         );
     }
 
-    let footer = Paragraph::new("↑/↓ Scroll  PgUp/PgDn Page  Home/End Top/Bottom  q or ? Close")
-        .style(Style::default().fg(Color::DarkGray))
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::TOP));
+    let footer =
+        Paragraph::new("[↑/↓] Scroll  [PgUp/PgDn] Page  [Home/End] Top/Bottom  [q] or [?] Close")
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[2]);
 }
 
@@ -107,7 +108,8 @@ fn build_help_lines() -> Vec<Line<'static>> {
         row("  q           Quit"),
         row("  ? / Esc     Open / close help"),
         row("  L           Lock vault now"),
-        row("  g           Generate password (anywhere)"),
+        row("  Ctrl+g      Generate password (anywhere)"),
+        row("  Ctrl+g      In entry form: apply to password field"),
         row("  Esc / Tab   Back / fields inside text inputs"),
         row("  Shift+Tab   Previous field"),
         row("  Ctrl+s      Save form"),
@@ -123,7 +125,9 @@ fn build_help_lines() -> Vec<Line<'static>> {
         row("  PgUp/PgDn   Page up/down"),
         row("  Home/End    First/last"),
         row("  /           Search (type to filter)"),
+        row("  o           Sort: Name A-Z/Z-A, Modified, Created"),
         row("  a           Add entry"),
+        row("  f           Toggle favourite"),
         row("  d           Delete entry"),
         row("  Enter       View entry"),
         Line::from(""),

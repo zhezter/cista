@@ -2,7 +2,7 @@ mod entry;
 mod secret_string;
 mod vault;
 
-pub use entry::Entry;
+pub use entry::{Entry, EntryType};
 pub use secret_string::SecretString;
 pub use vault::Vault;
 
@@ -128,5 +128,33 @@ mod tests {
         let old_json = br#"{"version":1,"entries":[]}"#;
         let vault: Vault = serde_json::from_slice(old_json).expect("old vault deserializes");
         assert_eq!(vault.created_at(), time::OffsetDateTime::UNIX_EPOCH);
+    }
+
+    #[test]
+    fn legacy_ui_metadata_fields_are_ignored() {
+        // Vaults written when `favorite`/`icon`/`entry_type` lived on the Entry
+        // itself must keep opening: those fields are now plaintext UI metadata
+        // stored separately, so serde ignores the extra keys here.
+        let old_json = br#"{
+            "version":1,
+            "entries":[
+                {
+                    "id":"11111111-1111-1111-1111-111111111111",
+                    "name":"github",
+                    "username":null,
+                    "password":"hunter2",
+                    "url":null,
+                    "notes":null,
+                    "favorite":true,
+                    "icon":"star",
+                    "entry_type":"Card",
+                    "created_at":[2024,1,0,0,0,0,0,0,0],
+                    "updated_at":[2024,1,0,0,0,0,0,0,0]
+                }
+            ]
+        }"#;
+        let vault: Vault = serde_json::from_slice(old_json).expect("old vault deserializes");
+        assert_eq!(vault.entries().len(), 1);
+        assert_eq!(vault.entries()[0].name(), "github");
     }
 }

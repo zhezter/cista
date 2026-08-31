@@ -34,7 +34,7 @@ pub fn draw_lock_screen(f: &mut Frame, _app: &mut App) {
     f.render_widget(msg, chunks[1]);
 
     // Unlock prompt
-    let hint = Paragraph::new("Enter Unlock  q Quit")
+    let hint = Paragraph::new("[Enter] Unlock  [q] Quit")
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));

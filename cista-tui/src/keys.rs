@@ -24,12 +24,18 @@ pub struct KeyBindings {
     pub copy_url: KeyBinding,
     pub edit: KeyBinding,
     pub reveal: KeyBinding,
+    pub toggle_favorite: KeyBinding,
     pub new_vault: KeyBinding,
     pub left: KeyBinding,
     pub right: KeyBinding,
     pub reroll: KeyBinding,
+    pub sort: KeyBinding,
     pub tab_next: KeyBinding,
     pub tab_prev: KeyBinding,
+    /// Shift+Tab is reported as `BackTab` by crossterm on most terminals, but
+    /// some report `Tab` with the SHIFT modifier set instead. `tab_prev_shift`
+    /// covers that variant.
+    pub tab_prev_shift: KeyBinding,
     pub save: KeyBinding,
 }
 
@@ -65,19 +71,22 @@ impl Default for KeyBindings {
             back: kb(Esc, KeyModifiers::NONE),
             search: kb(Char('/'), KeyModifiers::NONE),
             add: kb(Char('a'), KeyModifiers::NONE),
-            generate: kb(Char('g'), KeyModifiers::NONE),
+            generate: kb(Char('g'), KeyModifiers::CONTROL),
             delete: kb(Char('d'), KeyModifiers::NONE),
             copy_password: kb(Char('c'), KeyModifiers::NONE),
             copy_username: kb(Char('u'), KeyModifiers::NONE),
             copy_url: kb(Char('l'), KeyModifiers::NONE),
             edit: kb(Char('e'), KeyModifiers::NONE),
             reveal: kb(Char(' '), KeyModifiers::NONE),
+            toggle_favorite: kb(Char('f'), KeyModifiers::NONE),
             new_vault: kb(Char('n'), KeyModifiers::NONE),
             left: kb(Left, KeyModifiers::NONE),
             right: kb(Right, KeyModifiers::NONE),
             reroll: kb(Char('r'), KeyModifiers::NONE),
+            sort: kb(Char('o'), KeyModifiers::NONE),
             tab_next: kb(Tab, KeyModifiers::NONE),
-            tab_prev: kb(BackTab, KeyModifiers::NONE),
+            tab_prev: kb(BackTab, KeyModifiers::SHIFT),
+            tab_prev_shift: kb(Tab, KeyModifiers::SHIFT),
             save: kb(Char('s'), KeyModifiers::CONTROL),
         }
     }
@@ -99,6 +108,7 @@ const GLOBAL: &[Binding] = &[
     (Action::Back, |b| &b.back),
     (Action::TabNext, |b| &b.tab_next),
     (Action::TabPrev, |b| &b.tab_prev),
+    (Action::TabPrev, |b| &b.tab_prev_shift),
     (Action::Save, |b| &b.save),
 ];
 
@@ -129,8 +139,10 @@ const BOUND: &[Binding] = &[
     (Action::CopyUrl, |b| &b.copy_url),
     (Action::Edit, |b| &b.edit),
     (Action::Reveal, |b| &b.reveal),
+    (Action::ToggleFavorite, |b| &b.toggle_favorite),
     (Action::NewVault, |b| &b.new_vault),
     (Action::Reroll, |b| &b.reroll),
+    (Action::Sort, |b| &b.sort),
 ];
 
 impl ActionMapper {
@@ -189,6 +201,8 @@ pub enum Action {
     Reveal,
     NewVault,
     Reroll,
+    Sort,
+    ToggleFavorite,
     TabNext,
     TabPrev,
     Save,

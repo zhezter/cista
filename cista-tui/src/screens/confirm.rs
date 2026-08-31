@@ -13,9 +13,9 @@ pub fn draw_confirm(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Length(3),
+            Constraint::Length(3), // Title
+            Constraint::Length(3), // Message
+            Constraint::Length(3), // Buttons
             Constraint::Min(0),
         ])
         .split(area);
@@ -42,7 +42,7 @@ pub fn draw_confirm(f: &mut Frame, app: &mut App) {
     f.render_widget(msg, chunks[1]);
 
     // Buttons
-    let buttons = Paragraph::new("Enter Yes  Esc No")
+    let buttons = Paragraph::new("[Enter] Yes  [Esc] No")
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));

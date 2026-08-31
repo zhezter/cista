@@ -4,8 +4,11 @@ version = "0.1.1"
 edition = "2021"
 description = "Core library for Cista, a local, encrypted password manager"
 license = "MIT"
-repository = "https://github.com/zhezter/cista/cista-core"
-keywords = ["security", "cryptography", "argon2", "secret"]
+repository = "https://github.com/zhezter/cista"
+homepage = "https://github.com/zhezter/cista"
+documentation = "https://docs.rs/cista-core"
+readme = "README.md"
+keywords = ["security", "cryptography", "argon2", "secret", "vault"]
 categories = ["cryptography", "security", "authentication"]
 
 [dependencies]

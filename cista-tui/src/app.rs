@@ -1,4 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use ratatui::style::Color;
 use ratatui::Frame;
 use std::path::PathBuf;
 use std::sync::mpsc::TryRecvError;
@@ -9,7 +10,7 @@ use crate::screens::*;
 use crate::tasks::{self, PendingTask, TaskKind, TaskResult};
 use crate::widgets::*;
 use cista_core::config::Config;
-use cista_core::{SecretString, Vault};
+use cista_core::{EntryType, SecretString, Vault};
 use secrecy::{ExposeSecret, Secret};
 use zeroize::Zeroize;
 
@@ -58,10 +59,14 @@ pub struct App {
     // Unlock
     pub unlock_password: String,
     pub unlock_error: Option<String>,
+    /// What the master-password screen is being used for: unlocking to open a
+    /// vault, or confirming a password before deleting a vault.
+    pub unlock_mode: UnlockMode,
 
     // Session (when unlocked)
     pub vault_path: Option<PathBuf>,
     pub vault: Option<Vault>,
+    pub ui_state: cista_core::UiState,
     pub master_password: Option<Secret<SecretString>>,
     pub locked: bool,
     pub last_activity: Instant,
@@ -75,6 +80,7 @@ pub struct App {
     pub per_page: usize,
     pub search_query: String,
     pub in_search: bool,
+    pub sort_mode: SortMode,
 
     // Entry detail
     pub detail_entry_idx: Option<usize>,
@@ -93,6 +99,15 @@ pub struct App {
     pub gen_policy: GenPolicy,
     pub gen_selected: usize,
     pub gen_result: Option<String>,
+    /// True when the generator was opened from the entry form. In that mode a
+    /// second Ctrl+g (or Enter after generating) drops the generated password
+    /// into the form's password field and returns to the form.
+    pub gen_from_form: bool,
+    /// Screen the generator was opened from, so Esc/apply always lands back on
+    /// it. Kept separate from `previous_screen`, which the entry form relies on
+    /// (its own "back" destination), so opening the generator from the form
+    /// doesn't clobber the form's exit target.
+    pub gen_prev_screen: Option<Screen>,
 
     // Confirm dialog
     pub confirm_message: String,
@@ -117,6 +132,7 @@ pub struct VaultInfo {
     pub last_opened: Option<String>,
     pub entry_count: Option<usize>,
     pub size: u64,
+    pub created: Option<std::time::SystemTime>,
 }
 
 #[derive(Debug, Clone)]
@@ -125,6 +141,56 @@ pub struct EntryRow {
     pub name: String,
     pub username: Option<String>,
     pub url: Option<String>,
+    pub notes: Option<String>,
+    pub favorite: bool,
+    pub icon: String,
+    pub entry_type: EntryType,
+    pub created_at: time::OffsetDateTime,
+    pub updated_at: time::OffsetDateTime,
+    pub health: cista_core::health::Health,
+}
+
+/// How the entry list is ordered. Pressing `o` in the list cycles through
+/// these modes (forward through the paired direction toggles).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortMode {
+    NameAsc,
+    NameDesc,
+    UpdatedDesc,
+    UpdatedAsc,
+    CreatedDesc,
+    CreatedAsc,
+}
+
+impl SortMode {
+    /// Human-readable label shown in the table title / footer.
+    pub fn label(self) -> &'static str {
+        match self {
+            SortMode::NameAsc => "Name ↑",
+            SortMode::NameDesc => "Name ↓",
+            SortMode::UpdatedDesc => "Modified ↓",
+            SortMode::UpdatedAsc => "Modified ↑",
+            SortMode::CreatedDesc => "Created ↓",
+            SortMode::CreatedAsc => "Created ↑",
+        }
+    }
+
+    /// Next mode in the cycling order.
+    pub fn next(self) -> Self {
+        match self {
+            SortMode::NameAsc => SortMode::NameDesc,
+            SortMode::NameDesc => SortMode::UpdatedDesc,
+            SortMode::UpdatedDesc => SortMode::UpdatedAsc,
+            SortMode::UpdatedAsc => SortMode::CreatedDesc,
+            SortMode::CreatedDesc => SortMode::CreatedAsc,
+            SortMode::CreatedAsc => SortMode::NameAsc,
+        }
+    }
+}
+
+/// Case-insensitive name comparison for sorting.
+fn name_cmp(a: &EntryRow, b: &EntryRow) -> std::cmp::Ordering {
+    a.name.to_lowercase().cmp(&b.name.to_lowercase())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,6 +207,8 @@ pub struct FormFields {
     pub password_confirm: String,
     pub url: String,
     pub notes: String,
+    pub icon: String,
+    pub entry_type: EntryType,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -211,7 +279,12 @@ impl Default for GenPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
     DeleteEntry,
-    DeleteVault,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnlockMode {
+    Open,
+    Delete,
 }
 
 impl App {
@@ -225,8 +298,10 @@ impl App {
             vault_list_selected: 0,
             unlock_password: String::new(),
             unlock_error: None,
+            unlock_mode: UnlockMode::Open,
             vault_path: None,
             vault: None,
+            ui_state: cista_core::UiState::new(),
             master_password: None,
             locked: false,
             last_activity: Instant::now(),
@@ -238,6 +313,7 @@ impl App {
             per_page: 20,
             search_query: String::new(),
             in_search: false,
+            sort_mode: SortMode::NameAsc,
             detail_entry_idx: None,
             show_password: false,
             form_mode: FormMode::Add,
@@ -248,6 +324,8 @@ impl App {
             gen_policy: GenPolicy::default(),
             gen_selected: 0,
             gen_result: None,
+            gen_from_form: false,
+            gen_prev_screen: None,
             confirm_message: String::new(),
             confirm_on_yes: None,
             help_scroll: 0,
@@ -278,12 +356,16 @@ impl App {
                             let size = std::fs::metadata(entry.path())
                                 .map(|m| m.len())
                                 .unwrap_or(0);
+                            let created = std::fs::metadata(entry.path())
+                                .and_then(|m| m.created())
+                                .ok();
                             self.vaults.push(VaultInfo {
                                 name,
                                 path: entry.path(),
                                 last_opened,
                                 entry_count,
                                 size,
+                                created,
                             });
                         }
                     }
@@ -346,7 +428,8 @@ impl App {
                     result: Ok(vault),
                 } => {
                     let _ = cista_core::config::record_opened(&path);
-                    self.vault_path = Some(path);
+                    self.vault_path = Some(path.clone());
+                    self.ui_state = cista_core::UiState::load_for_vault(&path);
                     self.vault = Some(vault);
                     self.master_password = Some(password);
                     self.locked = false;
@@ -397,6 +480,23 @@ impl App {
                     _ => {}
                 }
             }
+            TaskKind::DeleteVault => match result {
+                TaskResult::DeleteVault { result: Ok(()) } => {
+                    self.unlock_mode = UnlockMode::Open;
+                    if let Some(path) = &self.vault_path {
+                        cista_core::UiState::remove_for_vault(path);
+                    }
+                    self.load_vaults();
+                    self.screen = Screen::VaultList;
+                    self.set_status("Vault deleted");
+                }
+                TaskResult::DeleteVault { result: Err(_) } => {
+                    self.unlock_error = Some("Invalid master password".into());
+                    self.unlock_password.clear();
+                    self.screen = Screen::Unlock;
+                }
+                _ => {}
+            },
         }
     }
 
@@ -411,10 +511,17 @@ impl App {
         let Some(task) = &self.pending else { return };
         let elapsed = task.started.elapsed().as_millis() as usize;
 
-        let backdrop = Block::default().style(Style::default().bg(Color::Black));
+        // Soft, dimmed backdrop: a dark grey tint rather than a solid black
+        // wall, so the running screen stays faintly visible behind the modal
+        // instead of being completely blanked out.
+        let backdrop = Block::default().style(
+            Style::default()
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::DIM),
+        );
         f.render_widget(backdrop, f.area());
 
-        let area = centered_rect(46, 22, f.area());
+        let area = centered_rect(46, 18, f.area());
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -475,7 +582,9 @@ impl App {
                 2 => &mut self.form_fields.password,
                 3 => &mut self.form_fields.password_confirm,
                 4 => &mut self.form_fields.url,
-                _ => &mut self.form_fields.notes,
+                5 => &mut self.form_fields.notes,
+                6 => &mut self.form_fields.icon,
+                _ => &mut self.form_fields.name,
             }),
             Screen::NewVault => Some(match self.new_vault_field_idx {
                 0 => &mut self.new_vault_fields.name,
@@ -567,6 +676,8 @@ impl App {
             Action::Reveal => self.handle_reveal(),
             Action::NewVault => self.handle_new_vault(),
             Action::Reroll => self.handle_reroll(),
+            Action::Sort => self.handle_sort(),
+            Action::ToggleFavorite => self.handle_toggle_favorite(),
             Action::TabNext => self.handle_tab_next(),
             Action::TabPrev => self.handle_tab_prev(),
             Action::Save => self.handle_save(),
@@ -593,6 +704,10 @@ impl App {
     fn lock_vault(&mut self) {
         self.vault = None;
         self.master_password = None;
+        self.vault_path = None;
+        self.ui_state = cista_core::UiState::new();
+        self.all_entries.clear();
+        self.entries.clear();
         self.locked = true;
         self.screen = Screen::Locked;
         self.in_search = false;
@@ -690,6 +805,63 @@ impl App {
         AppSignal::Continue
     }
 
+    /// Cycle the entry list sort mode ('o'). Resets to the first page so the
+    /// newly ordered list is seen from its start.
+    fn handle_sort(&mut self) -> AppSignal {
+        if self.screen == Screen::EntryList {
+            self.sort_mode = self.sort_mode.next();
+            let label = self.sort_mode.label();
+            self.recompute_filtered_entries();
+            self.set_status(&format!("Sorted by {label}"));
+        }
+        AppSignal::Continue
+    }
+
+    /// Toggle the favourite flag on the selected entry ('f'). Updates the
+    /// in-memory rows and the plaintext UI state, then persists metadata.
+    fn handle_toggle_favorite(&mut self) -> AppSignal {
+        if self.screen != Screen::EntryList {
+            return AppSignal::Continue;
+        }
+        let Some(idx) = self.get_selected_entry_idx() else {
+            return AppSignal::Continue;
+        };
+        let entry_id = self.entries[idx].id;
+        let new_val = self.ui_state.toggle_favourite(entry_id);
+
+        // Update both the pristine list and the visible list.
+        for e in self.all_entries.iter_mut() {
+            if e.id == entry_id {
+                e.favorite = new_val;
+            }
+        }
+        for e in self.entries.iter_mut() {
+            if e.id == entry_id {
+                e.favorite = new_val;
+            }
+        }
+
+        // Persist the plaintext metadata (fast, no re-seal).
+        self.save_ui_state();
+
+        // Keep favorites at the top.
+        self.recompute_filtered_entries();
+        self.set_status(if new_val {
+            "Marked as favourite"
+        } else {
+            "Removed from favourites"
+        });
+        AppSignal::Continue
+    }
+
+    /// Persist the current UI state to the XDG state directory. Safe to call
+    /// even when no vault is open (it becomes a no-op).
+    fn save_ui_state(&self) {
+        if let Some(path) = &self.vault_path {
+            let _ = self.ui_state.save_for_vault(path);
+        }
+    }
+
     fn toggle_gen_option(&mut self, option: GenOption) {
         let p = &mut self.gen_policy;
         match option {
@@ -753,13 +925,18 @@ impl App {
             Screen::VaultList => {
                 if let Some(vault) = self.vaults.get(self.vault_list_selected).cloned() {
                     self.vault_path = Some(vault.path);
+                    self.unlock_mode = UnlockMode::Open;
                     self.screen = Screen::Unlock;
                     self.unlock_password.clear();
                     self.unlock_error = None;
                 }
             }
             Screen::Unlock => {
-                self.try_unlock();
+                if self.unlock_mode == UnlockMode::Delete {
+                    self.try_delete_vault();
+                } else {
+                    self.try_unlock();
+                }
             }
             Screen::EntryList => {
                 if let Some(idx) = self.get_selected_entry_idx() {
@@ -768,11 +945,16 @@ impl App {
                     self.screen = Screen::EntryDetail;
                 }
             }
-            Screen::EntryForm | Screen::NewVault => {
-                self.handle_tab_next();
+            Screen::EntryForm => {
+                if self.form_field_idx == 7 {
+                    // Cycling the entry type selector field.
+                    self.cycle_entry_type();
+                } else {
+                    self.handle_tab_next();
+                }
             }
-            Screen::Generate => {
-                self.do_generate();
+            Screen::NewVault => {
+                self.handle_tab_next();
             }
             Screen::Locked => {
                 self.screen = Screen::Unlock;
@@ -780,6 +962,9 @@ impl App {
             }
             Screen::Confirm => {
                 self.confirm_yes();
+            }
+            Screen::Generate => {
+                self.do_generate();
             }
             _ => {}
         }
@@ -804,15 +989,57 @@ impl App {
         });
     }
 
+    /// Verifies the vault's master password in a background task and, only if
+    /// correct, deletes the vault file. Mirrors [`Self::try_unlock`] so the
+    /// same password screen drives both flows.
+    fn try_delete_vault(&mut self) {
+        let Some(path) = self.vault_path.clone() else {
+            self.unlock_error = Some("No vault selected".into());
+            return;
+        };
+        // `mem::take` so the plaintext master password never lingers in `App`.
+        let password = Secret::new(SecretString::from(std::mem::take(
+            &mut self.unlock_password,
+        )));
+        self.unlock_error = None;
+        self.pending = Some(PendingTask {
+            kind: TaskKind::DeleteVault,
+            started: Instant::now(),
+            rx: tasks::spawn_delete_vault(path, password),
+        });
+    }
+
     fn load_entries(&mut self) {
         self.all_entries.clear();
         if let Some(vault) = &self.vault {
-            for entry in vault.entries() {
+            let now = time::OffsetDateTime::now_utc();
+            // First pass: gather (password, age_days) pairs so the health check
+            // can count reuse across the whole vault before we build rows.
+            let pairs: Vec<(&str, i64)> = vault
+                .entries()
+                .iter()
+                .map(|e| {
+                    let age_days = (now - e.updated_at()).whole_days().max(0);
+                    (e.password().expose_secret().as_str(), age_days)
+                })
+                .collect();
+            let healths = cista_core::health::assess_all(pairs);
+
+            for (i, entry) in vault.entries().iter().enumerate() {
                 self.all_entries.push(EntryRow {
                     id: entry.id(),
                     name: entry.name().to_string(),
                     username: entry.username().map(|s| s.to_string()),
                     url: entry.url().map(|s| s.to_string()),
+                    notes: entry
+                        .notes()
+                        .map(|n| n.expose_secret().as_str().to_string()),
+                    favorite: self.ui_state.is_favourite(entry.id()),
+                    icon: self.ui_state.display_icon(entry.id()),
+                    entry_type: self.ui_state.entry_type(entry.id()),
+                    created_at: entry.created_at(),
+                    updated_at: entry.updated_at(),
+                    health: healths[i].clone(),
                 });
             }
         }
@@ -820,10 +1047,10 @@ impl App {
     }
 
     /// Rebuilds `entries` from the pristine `all_entries` list, applying the
-    /// current search filter. Never mutates `all_entries`, so clearing or
-    /// shortening the query restores every entry.
+    /// current search filter and sort order. Never mutates `all_entries`, so
+    /// clearing or shortening the query restores every entry.
     fn recompute_filtered_entries(&mut self) {
-        self.entries = if self.search_query.is_empty() {
+        let mut entries: Vec<EntryRow> = if self.search_query.is_empty() {
             self.all_entries.clone()
         } else {
             let q = self.search_query.to_lowercase();
@@ -839,10 +1066,32 @@ impl App {
                             .as_deref()
                             .map(|u| u.to_lowercase().contains(&q))
                             .unwrap_or(false)
+                        || e.notes
+                            .as_deref()
+                            .map(|n| n.to_lowercase().contains(&q))
+                            .unwrap_or(false)
                 })
                 .cloned()
                 .collect()
         };
+
+        // Favorites always come first; within each group the requested sort
+        // order applies. `sort_by` is stable, so equal-category rows keep
+        // their relative order from the search filter.
+        entries.sort_by(|a, b| {
+            b.favorite
+                .cmp(&a.favorite)
+                .then_with(|| match self.sort_mode {
+                    SortMode::NameAsc => name_cmp(a, b),
+                    SortMode::NameDesc => name_cmp(b, a),
+                    SortMode::UpdatedDesc => b.updated_at.cmp(&a.updated_at),
+                    SortMode::UpdatedAsc => a.updated_at.cmp(&b.updated_at),
+                    SortMode::CreatedDesc => b.created_at.cmp(&a.created_at),
+                    SortMode::CreatedAsc => a.created_at.cmp(&b.created_at),
+                })
+        });
+
+        self.entries = entries;
         self.entry_list_selected = 0;
         self.entry_list_page = 0;
     }
@@ -855,9 +1104,48 @@ impl App {
         }
     }
 
+    /// Health summary across all entries, e.g. `2 weak · 1 reused`. Empty
+    /// beyond a healthy vault, so the header stays tidy.
+    pub fn health_summary(&self) -> Option<String> {
+        let mut weak = 0usize;
+        let mut reused = 0usize;
+        for e in &self.all_entries {
+            if e.health.score < 60 {
+                weak += 1;
+            }
+            if e.health.used_in > 1 {
+                reused += 1;
+            }
+        }
+        if weak == 0 && reused == 0 {
+            return None;
+        }
+        let mut parts = Vec::new();
+        if weak > 0 {
+            parts.push(format!("{weak} weak"));
+        }
+        if reused > 0 {
+            parts.push(format!("{reused} reused"));
+        }
+        Some(parts.join(" · "))
+    }
+
+    /// Color for a health score: red for weak, yellow for middling, green for
+    /// strong.
+    pub fn health_color(score: u8) -> Color {
+        if score < 60 {
+            Color::Red
+        } else if score < 85 {
+            Color::Yellow
+        } else {
+            Color::Green
+        }
+    }
+
     fn handle_back(&mut self) -> AppSignal {
         match self.screen {
             Screen::Unlock => {
+                self.unlock_mode = UnlockMode::Open;
                 self.screen = Screen::VaultList;
                 self.unlock_password.zeroize();
             }
@@ -887,8 +1175,9 @@ impl App {
                 self.screen = Screen::VaultList;
             }
             Screen::Generate => {
-                self.screen = self.previous_screen.unwrap_or(Screen::VaultList);
+                self.screen = self.gen_prev_screen.unwrap_or(Screen::VaultList);
                 self.gen_result = None;
+                self.gen_from_form = false;
             }
             Screen::Locked => {
                 self.screen = Screen::Unlock;
@@ -946,9 +1235,26 @@ impl App {
 
     fn handle_generate(&mut self) -> AppSignal {
         if self.screen == Screen::Generate {
+            // Second Ctrl+g while the generator is open: if it was opened from
+            // the entry form, drop the generated password into the form and go
+            // back. Otherwise (standalone generator) there is nothing else to
+            // do on a second activate.
+            if self.gen_from_form {
+                if let Some(pwd) = self.gen_result.clone() {
+                    self.form_fields.password = pwd;
+                    self.form_fields.password_confirm = self.form_fields.password.clone();
+                    self.gen_from_form = false;
+                    self.gen_result = None;
+                    self.screen = self.gen_prev_screen.unwrap_or(Screen::EntryForm);
+                    self.set_status("Generated password applied to form");
+                } else {
+                    self.set_error("Generate a password first");
+                }
+            }
             return AppSignal::Continue;
         }
-        self.previous_screen = Some(self.screen);
+        self.gen_from_form = self.screen == Screen::EntryForm;
+        self.gen_prev_screen = Some(self.screen);
         self.screen = Screen::Generate;
         self.gen_policy = GenPolicy::default();
         self.gen_result = None;
@@ -968,10 +1274,14 @@ impl App {
         match self.screen {
             Screen::VaultList => {
                 if let Some(vault) = self.vaults.get(self.vault_list_selected) {
-                    self.confirm_message = format!("Delete vault '{}'?", vault.name);
-                    self.confirm_on_yes = Some(ConfirmAction::DeleteVault);
-                    self.previous_screen = Some(Screen::VaultList);
-                    self.screen = Screen::Confirm;
+                    // Deleting a vault is destructive, so the master-password
+                    // screen is reused (same as before unlocking): ask for the
+                    // vault's password and only delete when it verifies.
+                    self.vault_path = Some(vault.path.clone());
+                    self.unlock_mode = UnlockMode::Delete;
+                    self.unlock_password.clear();
+                    self.unlock_error = None;
+                    self.screen = Screen::Unlock;
                 }
             }
             Screen::EntryList | Screen::EntryDetail => {
@@ -1043,22 +1353,31 @@ impl App {
         AppSignal::Continue
     }
 
+    /// Applies `f` to the currently selected entry. Works from both the entry
+    /// list (selected/hovered row) and the entry detail screen, so a plain key
+    /// can copy the password (or username/URL) of the row under the cursor
+    /// without opening it first.
     fn copy_from_entry(
         &mut self,
         f: impl FnOnce(&cista_core::Entry) -> anyhow::Result<()>,
         ok_msg: &str,
     ) {
-        if self.screen == Screen::EntryDetail {
-            if let Some(idx) = self.detail_entry_idx {
-                if self.entries.get(idx).is_some() {
-                    if let Some(vault) = &self.vault {
-                        if let Some(entry) = vault.find_by_id(self.entries[idx].id) {
-                            match f(entry) {
-                                Ok(()) => self.set_status(ok_msg),
-                                Err(_) => self.set_error("Clipboard unavailable"),
-                            }
-                        }
-                    }
+        if self.screen != Screen::EntryList && self.screen != Screen::EntryDetail {
+            return;
+        }
+        let idx = match self.screen {
+            Screen::EntryDetail => self.detail_entry_idx,
+            _ => self.get_selected_entry_idx(),
+        };
+        let Some(idx) = idx else { return };
+        if self.entries.get(idx).is_none() {
+            return;
+        }
+        if let Some(vault) = &self.vault {
+            if let Some(entry) = vault.find_by_id(self.entries[idx].id) {
+                match f(entry) {
+                    Ok(()) => self.set_status(ok_msg),
+                    Err(_) => self.set_error("Clipboard unavailable"),
                 }
             }
         }
@@ -1081,6 +1400,8 @@ impl App {
                                     .notes()
                                     .map(|n| n.expose_secret().as_str().to_string())
                                     .unwrap_or_default(),
+                                icon: self.ui_state.icon(entry.id()).unwrap_or("").to_string(),
+                                entry_type: self.ui_state.entry_type(entry.id()),
                             };
                             self.form_field_idx = 0;
                             self.previous_screen = Some(Screen::EntryDetail);
@@ -1109,7 +1430,7 @@ impl App {
     fn handle_tab_next(&mut self) -> AppSignal {
         match self.screen {
             Screen::EntryForm => {
-                self.form_field_idx = (self.form_field_idx + 1) % 6;
+                self.form_field_idx = (self.form_field_idx + 1) % 8;
             }
             Screen::NewVault => {
                 self.new_vault_field_idx = (self.new_vault_field_idx + 1) % 3;
@@ -1122,7 +1443,7 @@ impl App {
     fn handle_tab_prev(&mut self) -> AppSignal {
         match self.screen {
             Screen::EntryForm => {
-                self.form_field_idx = (self.form_field_idx + 5) % 6;
+                self.form_field_idx = (self.form_field_idx + 7) % 8;
             }
             Screen::NewVault => {
                 self.new_vault_field_idx = (self.new_vault_field_idx + 2) % 3;
@@ -1130,6 +1451,17 @@ impl App {
             _ => {}
         }
         AppSignal::Continue
+    }
+
+    /// Cycle the entry type selector (Login → Card → Note → …) when pressed
+    /// while the type field is focused.
+    fn cycle_entry_type(&mut self) {
+        let next = match self.form_fields.entry_type {
+            EntryType::Login => EntryType::Card,
+            EntryType::Card => EntryType::Note,
+            EntryType::Note => EntryType::Login,
+        };
+        self.form_fields.entry_type = next;
     }
 
     fn handle_save(&mut self) -> AppSignal {
@@ -1152,18 +1484,13 @@ impl App {
                         if let Some(entry) = self.entries.get(idx).cloned() {
                             if let Some(vault) = &mut self.vault {
                                 if vault.remove_by_id(entry.id).is_ok() {
+                                    self.ui_state.remove_entry(entry.id);
+                                    self.save_ui_state();
                                     self.load_entries();
                                     self.start_save_task(TaskKind::SaveEntryDelete);
                                 }
                             }
                         }
-                    }
-                }
-                ConfirmAction::DeleteVault => {
-                    if let Some(vault) = self.vaults.get(self.vault_list_selected) {
-                        let _ = std::fs::remove_file(&vault.path);
-                        self.load_vaults();
-                        self.set_status("Vault deleted");
                     }
                 }
             }
@@ -1216,6 +1543,8 @@ impl App {
         let username = self.form_fields.username.clone();
         let notes = self.form_fields.notes.clone();
         let url = self.form_fields.url.clone();
+        let icon = self.form_fields.icon.clone();
+        let entry_type = self.form_fields.entry_type;
         let password_raw = std::mem::take(&mut self.form_fields.password);
         let confirm_raw = std::mem::take(&mut self.form_fields.password_confirm);
 
@@ -1249,7 +1578,7 @@ impl App {
         if let Some(vault) = &mut self.vault {
             let result: anyhow::Result<&mut Vault> = match self.form_mode {
                 FormMode::Add => {
-                    let entry = Entry::new(
+                    let created = Entry::new(
                         name.trim().to_string(),
                         if username.is_empty() {
                             None
@@ -1267,11 +1596,18 @@ impl App {
                         } else {
                             Some(notes.clone())
                         },
-                    );
-                    entry.map_err(anyhow::Error::from).map(|e| {
-                        vault.add_entry(e);
-                        vault
-                    })
+                    )
+                    .map_err(anyhow::Error::from);
+                    match created {
+                        Ok(e) => {
+                            let id = e.id();
+                            vault.add_entry(e);
+                            self.ui_state.set_entry_type(id, entry_type);
+                            self.ui_state.set_icon(id, Some(icon.clone()));
+                            Ok(vault)
+                        }
+                        Err(err) => Err(err),
+                    }
                 }
                 FormMode::Edit => {
                     if let Some(idx) = self.detail_entry_idx {
@@ -1296,6 +1632,8 @@ impl App {
                             } else {
                                 Some(notes.clone())
                             });
+                            self.ui_state.set_entry_type(entry_id, entry_type);
+                            self.ui_state.set_icon(entry_id, Some(icon.clone()));
                             Ok(vault)
                         } else {
                             Err(anyhow::anyhow!("Entry not found"))
@@ -1308,6 +1646,7 @@ impl App {
 
             match result {
                 Ok(_) => {
+                    self.save_ui_state();
                     let kind = match self.form_mode {
                         FormMode::Add => TaskKind::SaveEntryAdd,
                         FormMode::Edit => TaskKind::SaveEntryEdit,

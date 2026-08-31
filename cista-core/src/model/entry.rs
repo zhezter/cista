@@ -5,6 +5,37 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
+/// The kind of credential an entry stores. Controls which icon is shown and
+/// shapes the default fields in the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum EntryType {
+    #[default]
+    Login,
+    Card,
+    Note,
+}
+
+impl EntryType {
+    /// Human-readable label.
+    pub fn label(self) -> &'static str {
+        match self {
+            EntryType::Login => "Login",
+            EntryType::Card => "Card",
+            EntryType::Note => "Note",
+        }
+    }
+
+    /// A representative emoji shown beside entries in the UI. When an entry has
+    /// its own `icon`, that takes precedence.
+    pub fn default_icon(self) -> &'static str {
+        match self {
+            EntryType::Login => "🔑",
+            EntryType::Card => "💳",
+            EntryType::Note => "📝",
+        }
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Entry {
     id: Uuid,

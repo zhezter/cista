@@ -18,15 +18,22 @@ pub fn copy_secret_to_clipboard(text: &str) -> Result<()> {
                 Err(_) => return,
             };
             let until = std::time::Instant::now() + Duration::from_secs(CLEAR_DELAY_SECONDS);
-            let result = clipboard
+            if clipboard
                 .set()
                 .wait_until(until)
                 .exclude_from_history()
-                .text(owned);
-            if result.is_err() {
+                .text(owned)
+                .is_err()
+            {
                 return;
             }
-            let _ = clipboard.clear();
+            // Keep the `Clipboard` (which holds ownership of the contents) alive
+            // until the expiry time. `wait_until` already revokes/clears the
+            // contents at `until`, so there's no need for an explicit `clear()`.
+            // Clearing right after writing would drop the clipboard "too quickly"
+            // and make arboard print a warning straight to the terminal, which
+            // corrupts the TUI's layout.
+            std::thread::sleep(Duration::from_secs(CLEAR_DELAY_SECONDS));
         });
     }
 

@@ -5,7 +5,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::App;
+use crate::app::{App, UnlockMode};
 use crate::widgets::{centered_rect, cursor_offset};
 
 const WORDMARK: &str = " ####  #####   ####   #####   ### \n\
@@ -38,6 +38,8 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
         .alignment(Alignment::Center);
     f.render_widget(art, chunks[0]);
 
+    let deleting = app.unlock_mode == UnlockMode::Delete;
+
     // Vault name
     let vault_name = app
         .vault_path
@@ -46,6 +48,11 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
         .and_then(|n| n.to_str())
         .map(|n| n.trim_end_matches(".cista"))
         .unwrap_or("unknown");
+    let vault_title = if deleting {
+        format!(" Delete vault '{}'? ", vault_name)
+    } else {
+        " Vault ".to_string()
+    };
     let vault_text = Paragraph::new(vault_name.to_string())
         .style(Style::default().fg(Color::White))
         .alignment(Alignment::Center)
@@ -53,7 +60,7 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .title(" Vault "),
+                .title(vault_title),
         );
     f.render_widget(vault_text, chunks[1]);
 
@@ -80,9 +87,13 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
     }
 
     // Hint
-    let hint = Paragraph::new("Enter Unlock  Esc Back  (secrets are not echoed)")
-        .style(Style::default().fg(Color::DarkGray))
-        .alignment(Alignment::Center);
+    let hint = Paragraph::new(if deleting {
+        "[Enter] Delete vault  [Esc] Cancel  (secrets are not echoed)"
+    } else {
+        "[Enter] Unlock  [Esc] Back  (secrets are not echoed)"
+    })
+    .style(Style::default().fg(Color::DarkGray))
+    .alignment(Alignment::Center);
     f.render_widget(hint, chunks[4]);
 
     // Cursor position for password input
