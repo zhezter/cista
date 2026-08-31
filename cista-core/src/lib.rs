@@ -12,6 +12,7 @@ pub mod password_gen;
 pub mod paths;
 pub mod storage;
 pub mod ui_state;
+pub mod seal;
 
 mod serialization;
 

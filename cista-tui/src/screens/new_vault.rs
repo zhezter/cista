@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::widgets::{centered_rect, cursor_offset};
+use crate::widgets::{centered_rect, cursor_offset, mask_password};
 
 pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
     let area = centered_rect(60, 55, f.area());
@@ -93,8 +93,4 @@ pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
     .alignment(Alignment::Center)
     .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[5]);
-}
-
-fn mask_password(pwd: &str) -> String {
-    "•".repeat(pwd.chars().count())
 }

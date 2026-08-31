@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::app::{App, FormMode};
-use crate::widgets::{centered_rect, cursor_offset};
+use crate::widgets::{centered_rect, cursor_offset, mask_password};
 
 pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     let area = centered_rect(70, 90, f.area());
@@ -102,8 +102,4 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
             f.set_cursor_position((field_chunk.x + 1 + cursor_offset(value), field_chunk.y + 1));
         }
     }
-}
-
-fn mask_password(pwd: &str) -> String {
-    "•".repeat(pwd.chars().count())
 }

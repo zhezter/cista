@@ -12,6 +12,11 @@ pub fn cursor_offset(value: &str) -> u16 {
     UnicodeWidthStr::width(value) as u16
 }
 
+/// Masks a password with bullet characters (one per Unicode character).
+pub fn mask_password(pwd: &str) -> String {
+    "•".repeat(pwd.chars().count())
+}
+
 /// Renders a byte size as `B`, `KB` or `MB`.
 pub fn human_size(bytes: u64) -> String {
     const KB: f64 = 1024.0;
