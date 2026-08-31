@@ -31,7 +31,7 @@ pub fn draw_confirm(f: &mut Frame, app: &mut App) {
     f.render_widget(title, chunks[0]);
 
     // Message
-    let msg = Paragraph::new(app.confirm_message.as_str())
+    let msg = Paragraph::new(app.confirm.message.as_str())
         .style(Style::default().fg(Color::White))
         .alignment(Alignment::Center)
         .block(

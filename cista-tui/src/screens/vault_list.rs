@@ -76,10 +76,10 @@ fn draw_vault_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         ),
     ]);
 
-    let mut rows: Vec<ListItem> = Vec::with_capacity(app.vaults.len() + 1);
+    let mut rows: Vec<ListItem> = Vec::with_capacity(app.vault_list.vaults.len() + 1);
     rows.push(ListItem::new(header));
 
-    for v in &app.vaults {
+    for v in &app.vault_list.vaults {
         let count = v
             .entry_count
             .map(|c| c.to_string())
@@ -114,13 +114,13 @@ fn draw_vault_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .highlight_symbol("▸ ");
 
     let mut state = ListState::default();
-    state.select(Some(app.vault_list_selected.saturating_add(1)));
+    state.select(Some(app.vault_list.selected.saturating_add(1)));
     f.render_stateful_widget(list, area, &mut state);
 }
 
 /// Detail pane for the selected vault.
 fn draw_vault_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let selected = app.vaults.get(app.vault_list_selected);
+    let selected = app.vault_list.vaults.get(app.vault_list.selected);
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)

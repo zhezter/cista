@@ -22,8 +22,8 @@ pub fn draw_entry_detail(f: &mut Frame, app: &mut App) {
         .split(area);
 
     // Header
-    let idx = app.detail_entry_idx.unwrap_or(0);
-    let entry = app.entries.get(idx);
+    let idx = app.entry_detail.entry_idx.unwrap_or(0);
+    let entry = app.entry_list.entries.get(idx);
     let name = entry.map(|e| e.name.as_str()).unwrap_or("Unknown");
 
     let header = Paragraph::new(format!("Entry: {}", name))
@@ -37,12 +37,12 @@ pub fn draw_entry_detail(f: &mut Frame, app: &mut App) {
     f.render_widget(header, chunks[0]);
 
     // Detail content
-    if let Some(vault) = &app.vault {
+    if let Some(vault) = &app.session.vault {
         if let Some(entry) = entry.and_then(|e| vault.find_by_id(e.id)) {
             let user = entry.username().unwrap_or("-");
             let url = entry.url().unwrap_or("-");
             let password = entry.password().expose_secret().as_str();
-            let visible_pass = if app.show_password {
+            let visible_pass = if app.entry_detail.show_password {
                 password.to_string()
             } else {
                 "•".repeat(password.chars().count())

@@ -36,19 +36,19 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
         .iter()
         .enumerate()
         .map(|(i, option)| {
-            let is_focused = i == app.gen_selected;
+            let is_focused = i == app.generate.selected;
             let (label, value) = match option {
                 GenOption::Length => (
                     option.label().to_string(),
-                    app.gen_policy.length.to_string(),
+                    app.generate.policy.length.to_string(),
                 ),
                 _ => {
                     let on = match option {
-                        GenOption::Lowercase => app.gen_policy.include_lowercase,
-                        GenOption::Uppercase => app.gen_policy.include_uppercase,
-                        GenOption::Digits => app.gen_policy.include_digits,
-                        GenOption::Symbols => app.gen_policy.include_symbols,
-                        GenOption::ExcludeAmbiguous => app.gen_policy.exclude_ambiguous,
+                        GenOption::Lowercase => app.generate.policy.include_lowercase,
+                        GenOption::Uppercase => app.generate.policy.include_uppercase,
+                        GenOption::Digits => app.generate.policy.include_digits,
+                        GenOption::Symbols => app.generate.policy.include_symbols,
+                        GenOption::ExcludeAmbiguous => app.generate.policy.exclude_ambiguous,
                         GenOption::Length => false,
                     };
                     let state = if on { "[x]" } else { "[ ]" };
@@ -91,11 +91,11 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
         );
 
     let mut state = TableState::default();
-    state.select(Some(app.gen_selected));
+    state.select(Some(app.generate.selected));
     f.render_stateful_widget(table, chunks[1], &mut state);
 
     // Generated result
-    if let Some(pwd) = &app.gen_result {
+    if let Some(pwd) = &app.generate.result {
         let result = Paragraph::new(pwd.as_str())
             .style(
                 Style::default()
@@ -114,7 +114,7 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
     }
 
     // Footer
-    let footer_text = if app.gen_from_form {
+    let footer_text = if app.generate.from_form {
         "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Ctrl+g] Apply to form  [Esc] Cancel"
     } else {
         "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Esc] Back"

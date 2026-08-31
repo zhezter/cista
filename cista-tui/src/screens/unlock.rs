@@ -38,11 +38,11 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
         .alignment(Alignment::Center);
     f.render_widget(art, chunks[0]);
 
-    let deleting = app.unlock_mode == UnlockMode::Delete;
+    let deleting = app.unlock.mode == UnlockMode::Delete;
 
     // Vault name
     let vault_name = app
-        .vault_path
+        .session.vault_path
         .as_ref()
         .and_then(|p| p.file_name())
         .and_then(|n| n.to_str())
@@ -65,7 +65,7 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
     f.render_widget(vault_text, chunks[1]);
 
     // Password input
-    let masked = "•".repeat(app.unlock_password.chars().count());
+    let masked = "•".repeat(app.unlock.password.chars().count());
     let cursor_col = cursor_offset(&masked);
     let password = Paragraph::new(masked)
         .style(Style::default().fg(Color::White))
@@ -79,7 +79,7 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
     f.render_widget(password, chunks[2]);
 
     // Error
-    if let Some(err) = &app.unlock_error {
+    if let Some(err) = &app.unlock.error {
         let error = Paragraph::new(err.as_str())
             .style(Style::default().fg(Color::Red))
             .alignment(Alignment::Center);

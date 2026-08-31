@@ -35,21 +35,21 @@ pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
 
     // Fields
     let fields = [
-        ("Vault name", &app.new_vault_fields.name, 1),
+        ("Vault name", &app.new_vault.fields.name, 1),
         (
             "Master password",
-            &mask_password(&app.new_vault_fields.password),
+            &mask_password(&app.new_vault.fields.password),
             2,
         ),
         (
             "Confirm password",
-            &mask_password(&app.new_vault_fields.confirm),
+            &mask_password(&app.new_vault.fields.confirm),
             3,
         ),
     ];
 
     for (label, value, idx) in fields {
-        let is_active = app.new_vault_field_idx == idx - 1;
+        let is_active = app.new_vault.field_idx == idx - 1;
         let fg = if is_active {
             Color::Yellow
         } else {

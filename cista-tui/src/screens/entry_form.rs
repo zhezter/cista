@@ -28,7 +28,7 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
         .split(area);
 
     // Header
-    let mode = match app.form_mode {
+    let mode = match app.entry_form.mode {
         FormMode::Add => "Add Entry",
         FormMode::Edit => "Edit Entry",
     };
@@ -43,21 +43,21 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     f.render_widget(header, chunks[0]);
 
     // Fields
-    let masked_pw = mask_password(&app.form_fields.password);
-    let masked_cf = mask_password(&app.form_fields.password_confirm);
+    let masked_pw = mask_password(&app.entry_form.fields.password);
+    let masked_cf = mask_password(&app.entry_form.fields.password_confirm);
     let fields = [
-        ("Service name", app.form_fields.name.as_str(), 1, false),
-        ("Username", app.form_fields.username.as_str(), 2, false),
+        ("Service name", app.entry_form.fields.name.as_str(), 1, false),
+        ("Username", app.entry_form.fields.username.as_str(), 2, false),
         ("Password", masked_pw.as_str(), 3, false),
         ("Confirm password", masked_cf.as_str(), 4, false),
-        ("URL", app.form_fields.url.as_str(), 5, false),
-        ("Notes", app.form_fields.notes.as_str(), 6, false),
-        ("Icon", app.form_fields.icon.as_str(), 7, false),
-        ("Type", app.form_fields.entry_type.label(), 8, true),
+        ("URL", app.entry_form.fields.url.as_str(), 5, false),
+        ("Notes", app.entry_form.fields.notes.as_str(), 6, false),
+        ("Icon", app.entry_form.fields.icon.as_str(), 7, false),
+        ("Type", app.entry_form.fields.entry_type.label(), 8, true),
     ];
 
     for (label, value, idx, is_type) in fields {
-        let is_active = app.form_field_idx == idx - 1;
+        let is_active = app.entry_form.field_idx == idx - 1;
         let style = if is_active {
             Style::default()
                 .fg(Color::Yellow)
@@ -96,7 +96,7 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     f.render_widget(footer, chunks[10]);
 
     // Cursor for the active text field (skip the type selector).
-    if let Some((_, value, idx, is_type)) = fields.get(app.form_field_idx) {
+    if let Some((_, value, idx, is_type)) = fields.get(app.entry_form.field_idx) {
         if !*is_type {
             let field_chunk = chunks[*idx];
             f.set_cursor_position((field_chunk.x + 1 + cursor_offset(value), field_chunk.y + 1));

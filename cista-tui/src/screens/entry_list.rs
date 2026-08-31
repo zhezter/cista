@@ -20,15 +20,15 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
 
     // Header with vault name and search
     let vault_name = app
-        .vault_path
+        .session.vault_path
         .as_ref()
         .and_then(|p| p.file_name())
         .and_then(|n| n.to_str())
         .map(|n| n.trim_end_matches(".cista"))
         .unwrap_or("unknown");
 
-    let header_text = if app.in_search {
-        format!("🔍 Search: {}_", app.search_query)
+    let header_text = if app.entry_list.in_search {
+        format!("🔍 Search: {}_", app.entry_list.search_query)
     } else {
         let health = app
             .health_summary()
@@ -38,7 +38,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
             "{}  🔓  {}[o]Sort: {}  [L]Lock",
             vault_name,
             health,
-            app.sort_mode.label()
+            app.entry_list.sort_mode.label()
         )
     };
 
@@ -63,7 +63,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     draw_entry_detail_pane(f, app, main[1]);
 
     // Footer
-    let footer_text = if app.in_search {
+    let footer_text = if app.entry_list.in_search {
         "Type to filter  [Esc] Clear search  [↑/↓] Navigate  [Enter] View"
     } else {
         "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [a] Add  [Ctrl+g] Generate  [f] Favourite  [d] Delete  [Enter] View  [c] Copy pass  [q] Quit  [?] Help"
@@ -78,12 +78,12 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
 
 /// Aligned multi-column table of entries (title | username | modified | url).
 fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let start = app.entry_list_page * app.per_page;
-    let end = (start + app.per_page).min(app.entries.len());
-    let page_entries = &app.entries[start..end];
+    let start = app.entry_list.page * app.entry_list.per_page;
+    let end = (start + app.entry_list.per_page).min(app.entry_list.entries.len());
+    let page_entries = &app.entry_list.entries[start..end];
 
-    if app.entries.is_empty() {
-        let empty = Paragraph::new(if app.in_search {
+    if app.entry_list.entries.is_empty() {
+        let empty = Paragraph::new(if app.entry_list.in_search {
             "No entries match your search.\n\nClear the query (Esc) to browse all entries."
         } else {
             "No entries yet.\n\nPress [a] to add your first entry\nor [Ctrl+g] to generate a password."
@@ -106,8 +106,8 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             .add_modifier(Modifier::BOLD),
     );
 
-    let needle = if app.in_search {
-        app.search_query.to_lowercase()
+    let needle = if app.entry_list.in_search {
+        app.entry_list.search_query.to_lowercase()
     } else {
         String::new()
     };
@@ -135,12 +135,12 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         })
         .collect();
 
-    let total_pages = app.entries.len().div_ceil(app.per_page);
+    let total_pages = app.entry_list.entries.len().div_ceil(app.entry_list.per_page);
     let title = format!(
         "Entries ({}) · {}  Page {}/{}",
-        app.entries.len(),
-        app.sort_mode.label(),
-        app.entry_list_page + 1,
+        app.entry_list.entries.len(),
+        app.entry_list.sort_mode.label(),
+        app.entry_list.page + 1,
         total_pages.max(1)
     );
 
@@ -171,7 +171,7 @@ fn draw_entry_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
         .highlight_symbol("▸ ");
 
     let mut state = TableState::default();
-    state.select(Some(app.entry_list_selected.saturating_sub(start)));
+    state.select(Some(app.entry_list.selected.saturating_sub(start)));
     f.render_stateful_widget(table, area, &mut state);
 }
 
@@ -183,7 +183,7 @@ fn draw_entry_detail_pane(f: &mut Frame, app: &App, area: ratatui::layout::Rect)
         .title("Entry")
         .border_style(Style::default().fg(Color::Blue));
 
-    let Some(e) = app.entries.get(app.entry_list_selected) else {
+    let Some(e) = app.entry_list.entries.get(app.entry_list.selected) else {
         let pane = Paragraph::new("No entry selected")
             .style(Style::default().fg(Color::DarkGray))
             .block(block);

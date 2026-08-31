@@ -35,12 +35,12 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
     let lines = build_help_lines();
     let total = lines.len();
     let viewport = (chunks[1].height.saturating_sub(2).max(1)) as usize;
-    let scroll = app.help_scroll as usize;
+    let scroll = app.help.scroll as usize;
 
     // Clamp so the last line never scrolls above the bottom edge.
     let max_scroll = total.saturating_sub(viewport);
     if scroll > max_scroll {
-        app.help_scroll = max_scroll as u16;
+        app.help.scroll = max_scroll as u16;
     }
 
     let help = Paragraph::new(lines)
@@ -50,7 +50,7 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded),
         )
-        .scroll((app.help_scroll, 0))
+        .scroll((app.help.scroll, 0))
         .alignment(Alignment::Left);
     f.render_widget(help, chunks[1]);
 
