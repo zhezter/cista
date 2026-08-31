@@ -2,6 +2,7 @@
 
 use crate::handlers;
 use crate::prompts::InputSource;
+use crate::session::Session;
 use crate::ui;
 use cista_core::config::Config;
 use cista_core::SecretString;
@@ -18,16 +19,6 @@ use secrecy::Secret;
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::time::{Duration, Instant};
-
-struct Session {
-    path: PathBuf,
-    vault: Option<Vault>,
-    password: Option<Secret<SecretString>>,
-    locked: bool,
-    last_activity: Instant,
-    auto_lock_seconds: u64,
-}
 
 #[derive(Debug)]
 enum ReplCommand {
@@ -47,41 +38,6 @@ enum ReplCommand {
     Unlock,
     Help,
     Exit,
-}
-
-impl Session {
-    fn lock(&mut self) {
-        // Dropping the vault and password zeroizes the secrets via Secret::drop.
-        self.vault = None;
-        self.password = None;
-        self.locked = true;
-    }
-
-    fn unlock(&mut self, input: &mut dyn InputSource) -> anyhow::Result<()> {
-        let raw = input.read_password("Master password: ")?;
-        let (vault, password) = crate::vault_session::unlock_raw(&self.path, &raw)?;
-        self.vault = Some(vault);
-        self.password = Some(password);
-        self.locked = false;
-        self.touch();
-        Ok(())
-    }
-
-    fn touch(&mut self) {
-        self.last_activity = Instant::now();
-    }
-
-    fn is_expired(&self) -> bool {
-        !self.locked
-            && self.auto_lock_seconds != 0
-            && self.last_activity.elapsed() >= Duration::from_secs(self.auto_lock_seconds)
-    }
-
-    fn vault(&self) -> anyhow::Result<&Vault> {
-        self.vault
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("vault is locked"))
-    }
 }
 
 fn parse_command(line: &str) -> ReplCommand {
@@ -335,14 +291,7 @@ pub fn run(
         .map(|c| c.auto_lock_seconds)
         .unwrap_or(300);
 
-    let mut session = Session {
-        path,
-        vault: Some(vault),
-        password: Some(password),
-        locked: false,
-        last_activity: Instant::now(),
-        auto_lock_seconds,
-    };
+    let mut session = Session::new(path, vault, password, auto_lock_seconds);
 
     println!(
         "Cista session on {:?}. Type 'help' for commands.",

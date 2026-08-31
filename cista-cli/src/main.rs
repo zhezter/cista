@@ -3,6 +3,7 @@ mod clipboard;
 mod handlers;
 mod prompts;
 mod repl;
+mod session;
 mod table;
 mod ui;
 mod vault_session;
