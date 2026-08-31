@@ -59,6 +59,9 @@ pub struct App {
     // Unlock
     pub unlock_password: String,
     pub unlock_error: Option<String>,
+    /// What the master-password screen is being used for: unlocking to open a
+    /// vault, or confirming a password before deleting a vault.
+    pub unlock_mode: UnlockMode,
 
     // Session (when unlocked)
     pub vault_path: Option<PathBuf>,
@@ -103,9 +106,6 @@ pub struct App {
     // Confirm dialog
     pub confirm_message: String,
     pub confirm_on_yes: Option<ConfirmAction>,
-    /// Master password typed in the confirm dialog. Only used (and required)
-    /// when deleting a vault, to verify the password before removing the file.
-    pub confirm_password: String,
 
     // Help
     pub help_scroll: u16,
@@ -268,7 +268,12 @@ impl Default for GenPolicy {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfirmAction {
     DeleteEntry,
-    DeleteVault,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnlockMode {
+    Open,
+    Delete,
 }
 
 impl App {
@@ -282,6 +287,7 @@ impl App {
             vault_list_selected: 0,
             unlock_password: String::new(),
             unlock_error: None,
+            unlock_mode: UnlockMode::Open,
             vault_path: None,
             vault: None,
             master_password: None,
@@ -309,7 +315,6 @@ impl App {
             gen_from_form: false,
             confirm_message: String::new(),
             confirm_on_yes: None,
-            confirm_password: String::new(),
             help_scroll: 0,
             mapper,
             status_message: None,
@@ -463,16 +468,15 @@ impl App {
             }
             TaskKind::DeleteVault => match result {
                 TaskResult::DeleteVault { result: Ok(()) } => {
+                    self.unlock_mode = UnlockMode::Open;
                     self.load_vaults();
                     self.screen = Screen::VaultList;
                     self.set_status("Vault deleted");
                 }
                 TaskResult::DeleteVault { result: Err(_) } => {
-                    self.set_error("Invalid master password");
-                    self.screen = Screen::Confirm;
-                    self.confirm_password.clear();
-                    self.detail_entry_idx = None;
-                    self.show_password = false;
+                    self.unlock_error = Some("Invalid master password".into());
+                    self.unlock_password.clear();
+                    self.screen = Screen::Unlock;
                 }
                 _ => {}
             },
@@ -568,9 +572,6 @@ impl App {
                 1 => &mut self.new_vault_fields.password,
                 _ => &mut self.new_vault_fields.confirm,
             }),
-            Screen::Confirm if self.confirm_on_yes == Some(ConfirmAction::DeleteVault) => {
-                Some(&mut self.confirm_password)
-            }
             _ => None,
         }
     }
@@ -855,13 +856,18 @@ impl App {
             Screen::VaultList => {
                 if let Some(vault) = self.vaults.get(self.vault_list_selected).cloned() {
                     self.vault_path = Some(vault.path);
+                    self.unlock_mode = UnlockMode::Open;
                     self.screen = Screen::Unlock;
                     self.unlock_password.clear();
                     self.unlock_error = None;
                 }
             }
             Screen::Unlock => {
-                self.try_unlock();
+                if self.unlock_mode == UnlockMode::Delete {
+                    self.try_delete_vault();
+                } else {
+                    self.try_unlock();
+                }
             }
             Screen::EntryList => {
                 if let Some(idx) = self.get_selected_entry_idx() {
@@ -881,13 +887,7 @@ impl App {
                 self.unlock_password.clear();
             }
             Screen::Confirm => {
-                if self.confirm_on_yes == Some(ConfirmAction::DeleteVault)
-                    && self.confirm_password.is_empty()
-                {
-                    self.set_error("Enter the master password to confirm");
-                } else {
-                    self.confirm_yes();
-                }
+                self.confirm_yes();
             }
             _ => {}
         }
@@ -909,6 +909,26 @@ impl App {
             kind: TaskKind::Unlock,
             started: Instant::now(),
             rx: tasks::spawn_unlock(path, password),
+        });
+    }
+
+    /// Verifies the vault's master password in a background task and, only if
+    /// correct, deletes the vault file. Mirrors [`Self::try_unlock`] so the
+    /// same password screen drives both flows.
+    fn try_delete_vault(&mut self) {
+        let Some(path) = self.vault_path.clone() else {
+            self.unlock_error = Some("No vault selected".into());
+            return;
+        };
+        // `mem::take` so the plaintext master password never lingers in `App`.
+        let password = Secret::new(SecretString::from(std::mem::take(
+            &mut self.unlock_password,
+        )));
+        self.unlock_error = None;
+        self.pending = Some(PendingTask {
+            kind: TaskKind::DeleteVault,
+            started: Instant::now(),
+            rx: tasks::spawn_delete_vault(path, password),
         });
     }
 
@@ -1038,6 +1058,7 @@ impl App {
     fn handle_back(&mut self) -> AppSignal {
         match self.screen {
             Screen::Unlock => {
+                self.unlock_mode = UnlockMode::Open;
                 self.screen = Screen::VaultList;
                 self.unlock_password.zeroize();
             }
@@ -1078,7 +1099,6 @@ impl App {
             Screen::Confirm => {
                 self.screen = self.previous_screen.unwrap_or(Screen::EntryList);
                 self.confirm_on_yes = None;
-                self.confirm_password.zeroize();
             }
             Screen::Help => {
                 self.screen = self.previous_screen.unwrap_or(Screen::VaultList);
@@ -1167,12 +1187,14 @@ impl App {
         match self.screen {
             Screen::VaultList => {
                 if let Some(vault) = self.vaults.get(self.vault_list_selected) {
-                    self.confirm_message =
-                        format!("Delete vault '{}'?\nMaster password:", vault.name);
-                    self.confirm_password.clear();
-                    self.confirm_on_yes = Some(ConfirmAction::DeleteVault);
-                    self.previous_screen = Some(Screen::VaultList);
-                    self.screen = Screen::Confirm;
+                    // Deleting a vault is destructive, so the master-password
+                    // screen is reused (same as before unlocking): ask for the
+                    // vault's password and only delete when it verifies.
+                    self.vault_path = Some(vault.path.clone());
+                    self.unlock_mode = UnlockMode::Delete;
+                    self.unlock_password.clear();
+                    self.unlock_error = None;
+                    self.screen = Screen::Unlock;
                 }
             }
             Screen::EntryList | Screen::EntryDetail => {
@@ -1367,20 +1389,6 @@ impl App {
                                 }
                             }
                         }
-                    }
-                }
-                ConfirmAction::DeleteVault => {
-                    if let Some(vault) = self.vaults.get(self.vault_list_selected) {
-                        use secrecy::Secret;
-                        let password = Secret::new(SecretString::from(std::mem::take(
-                            &mut self.confirm_password,
-                        )));
-                        self.pending = Some(PendingTask {
-                            kind: TaskKind::DeleteVault,
-                            started: Instant::now(),
-                            rx: crate::tasks::spawn_delete_vault(vault.path.clone(), password),
-                        });
-                        return;
                     }
                 }
             }
