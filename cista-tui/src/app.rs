@@ -47,6 +47,7 @@ pub enum Screen {
     Confirm,
     Help,
     Dashboard,
+    ChangePassword,
 }
 
 pub struct App {
@@ -85,6 +86,9 @@ pub struct App {
 
     /// Health dashboard screen.
     pub dashboard: DashboardState,
+
+    /// Change-master-password flow.
+    pub change_password: ChangePasswordState,
 
     // Input
     mapper: ActionMapper,
@@ -177,6 +181,22 @@ pub struct DashboardState {
     pub selected: usize,
     /// Top scroll offset for the entry list.
     pub scroll: u16,
+}
+
+/// Which field of the change-master-password flow is being filled in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChangeStage {
+    Current,
+    New,
+    Confirm,
+}
+
+pub struct ChangePasswordState {
+    pub stage: ChangeStage,
+    pub current: String,
+    pub new: String,
+    pub confirm: String,
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -406,6 +426,13 @@ impl App {
                 selected: 0,
                 scroll: 0,
             },
+            change_password: ChangePasswordState {
+                stage: ChangeStage::Current,
+                current: String::new(),
+                new: String::new(),
+                confirm: String::new(),
+                error: None,
+            },
             mapper,
             status_message: None,
             status_error: None,
@@ -468,6 +495,7 @@ impl App {
             Screen::Confirm => draw_confirm(f, self),
             Screen::Help => draw_help(f, self),
             Screen::Dashboard => draw_dashboard(f, self),
+            Screen::ChangePassword => draw_change_password(f, self),
         }
 
         if let Some(msg) = &self.status_message {
@@ -575,6 +603,35 @@ impl App {
                 }
                 _ => {}
             },
+            TaskKind::VerifyPassword => match result {
+                TaskResult::VerifyPassword { result: Ok(()) } => {
+                    self.change_password.current.clear();
+                    self.change_password.stage = ChangeStage::New;
+                    self.change_password.error = None;
+                }
+                TaskResult::VerifyPassword { result: Err(_) } => {
+                    self.change_password.current.clear();
+                    self.change_password.error = Some("Invalid master password".into());
+                }
+                _ => {}
+            },
+            TaskKind::ChangePassword => match result {
+                TaskResult::ChangePassword {
+                    result: Ok(()),
+                    password,
+                } => {
+                    self.session.master_password = Some(password);
+                    let target = self.previous_screen.unwrap_or(Screen::EntryList);
+                    self.reset_change_password();
+                    self.screen = target;
+                    self.set_status("Master password changed");
+                }
+                TaskResult::ChangePassword { result: Err(e), .. } => {
+                    self.set_error(&format!("Failed to change master password: {e}"));
+                    self.cancel_change_password();
+                }
+                _ => {}
+            },
         }
     }
 
@@ -671,6 +728,11 @@ impl App {
                 1 => &mut self.new_vault.fields.password,
                 _ => &mut self.new_vault.fields.confirm,
             }),
+            Screen::ChangePassword => Some(match self.change_password.stage {
+                ChangeStage::Current => &mut self.change_password.current,
+                ChangeStage::New => &mut self.change_password.new,
+                ChangeStage::Confirm => &mut self.change_password.confirm,
+            }),
             _ => None,
         }
     }
@@ -746,6 +808,7 @@ impl App {
             Screen::Confirm => self.update_confirm(action),
             Screen::Help => self.update_help(action),
             Screen::Dashboard => self.update_dashboard(action),
+            Screen::ChangePassword => self.update_change_password(action),
         }
     }
 
@@ -819,6 +882,7 @@ impl App {
             Action::CopyUrl => self.handle_copy_url(),
             Action::Sort => self.handle_sort(),
             Action::Dashboard => self.handle_dashboard(),
+            Action::ChangePassword => self.handle_change_password(),
             Action::ToggleFavorite => self.handle_toggle_favorite(),
             _ => AppSignal::Continue,
         }
@@ -1006,6 +1070,107 @@ impl App {
             self.entry_detail.show_password = false;
             self.screen = Screen::EntryDetail;
         }
+        AppSignal::Continue
+    }
+
+    fn update_change_password(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Enter => self.advance_change_password(),
+            Action::Back => self.cancel_change_password(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    /// Entry point from the entry list: opens the change-master-password flow
+    /// on top of the current screen.
+    fn handle_change_password(&mut self) -> AppSignal {
+        if self.session.vault.is_none() {
+            return AppSignal::Continue;
+        }
+        self.previous_screen = Some(self.screen);
+        self.reset_change_password();
+        self.screen = Screen::ChangePassword;
+        AppSignal::Continue
+    }
+
+    fn reset_change_password(&mut self) {
+        self.change_password.stage = ChangeStage::Current;
+        self.change_password.current.clear();
+        self.change_password.new.clear();
+        self.change_password.confirm.clear();
+        self.change_password.error = None;
+    }
+
+    fn advance_change_password(&mut self) -> AppSignal {
+        match self.change_password.stage {
+            ChangeStage::Current => {
+                if self.change_password.current.is_empty() {
+                    self.change_password.error = Some("Enter your current master password".into());
+                    return AppSignal::Continue;
+                }
+                let Some(path) = self.session.vault_path.clone() else {
+                    return AppSignal::Continue;
+                };
+                // `mem::take` so the plaintext never lingers in the state.
+                let password = Secret::new(SecretString::from(std::mem::take(
+                    &mut self.change_password.current,
+                )));
+                self.pending = Some(PendingTask {
+                    kind: TaskKind::VerifyPassword,
+                    started: Instant::now(),
+                    rx: tasks::spawn_verify_password(path, password),
+                });
+            }
+            ChangeStage::New => {
+                if self.change_password.new.is_empty() {
+                    self.change_password.error = Some("New master password is required".into());
+                    return AppSignal::Continue;
+                }
+                self.change_password.stage = ChangeStage::Confirm;
+                self.change_password.error = None;
+            }
+            ChangeStage::Confirm => {
+                if self.change_password.new != self.change_password.confirm {
+                    // Back to the new-password step; both buffers are cleared so
+                    // no partial secret lingers.
+                    self.change_password.new.clear();
+                    self.change_password.confirm.clear();
+                    self.change_password.stage = ChangeStage::New;
+                    self.change_password.error = Some("Passwords do not match".into());
+                    return AppSignal::Continue;
+                }
+                self.finish_change_password();
+            }
+        }
+        AppSignal::Continue
+    }
+
+    /// Re-seals the vault with the new master password in a background task.
+    fn finish_change_password(&mut self) {
+        let Some(path) = self.session.vault_path.clone() else {
+            return;
+        };
+        let Some(vault) = self.session.vault.clone() else {
+            return;
+        };
+        let new_password = Secret::new(SecretString::from(std::mem::take(
+            &mut self.change_password.confirm,
+        )));
+        self.change_password.new.clear();
+        self.pending = Some(PendingTask {
+            kind: TaskKind::ChangePassword,
+            started: Instant::now(),
+            rx: tasks::spawn_change_password(path, vault, new_password),
+        });
+    }
+
+    fn cancel_change_password(&mut self) -> AppSignal {
+        let target = self.previous_screen.unwrap_or(Screen::EntryList);
+        self.reset_change_password();
+        self.screen = target;
         AppSignal::Continue
     }
 

@@ -23,6 +23,8 @@ pub enum TaskKind {
     SaveEntryEdit,
     SaveEntryDelete,
     DeleteVault,
+    VerifyPassword,
+    ChangePassword,
 }
 
 impl TaskKind {
@@ -34,6 +36,8 @@ impl TaskKind {
                 "Saving vault…"
             }
             TaskKind::DeleteVault => "Deleting vault…",
+            TaskKind::VerifyPassword => "Verifying password…",
+            TaskKind::ChangePassword => "Saving vault…",
         }
     }
 }
@@ -58,6 +62,17 @@ pub enum TaskResult {
     /// removed.
     DeleteVault {
         result: Result<(), String>,
+    },
+    /// Verifies the master password against the vault file without opening
+    /// it (used to re-confirm the current password before changing it).
+    VerifyPassword {
+        result: Result<(), String>,
+    },
+    /// Re-seals the vault with a new master password, handing the new secret
+    /// back so the in-memory session can switch to it.
+    ChangePassword {
+        result: Result<(), String>,
+        password: Secret<SecretString>,
     },
     /// The thread died before sending anything (only possible on a bug/panic).
     Failed,
@@ -130,6 +145,37 @@ pub fn spawn_delete_vault(path: PathBuf, password: Secret<SecretString>) -> Rece
             Err(e) => Err(e),
         };
         let _ = tx.send(TaskResult::DeleteVault { result });
+    });
+    rx
+}
+
+/// Verifies the master password against the vault file only. Runs on a worker
+/// thread because verification is Argon2-heavy, exactly like unlocking.
+pub fn spawn_verify_password(
+    path: PathBuf,
+    password: Secret<SecretString>,
+) -> Receiver<TaskResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = load_vault_from_path(&path, password.expose_secret().as_str().as_bytes())
+            .map(|_| ())
+            .map_err(|e| e.to_string());
+        let _ = tx.send(TaskResult::VerifyPassword { result });
+    });
+    rx
+}
+
+/// Re-seals the vault file with `password` as the new master password, handing
+/// the secret back through the channel so the session can adopt it on success.
+pub fn spawn_change_password(
+    path: PathBuf,
+    vault: Vault,
+    password: Secret<SecretString>,
+) -> Receiver<TaskResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let result = vault.save(&path, &password).map_err(|e| e.to_string());
+        let _ = tx.send(TaskResult::ChangePassword { result, password });
     });
     rx
 }
