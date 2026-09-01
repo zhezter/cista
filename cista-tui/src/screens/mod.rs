@@ -1,4 +1,5 @@
 pub mod confirm;
+pub mod dashboard;
 pub mod entry_detail;
 pub mod entry_form;
 pub mod entry_list;
@@ -10,6 +11,7 @@ pub mod unlock;
 pub mod vault_list;
 
 pub use confirm::draw_confirm;
+pub use dashboard::draw_dashboard;
 pub use entry_detail::draw_entry_detail;
 pub use entry_form::draw_entry_form;
 pub use entry_list::draw_entry_list;

@@ -126,6 +126,7 @@ fn build_help_lines() -> Vec<Line<'static>> {
         row("  Home/End    First/last"),
         row("  /           Search (type to filter)"),
         row("  o           Sort: Name A-Z/Z-A, Modified, Created"),
+        row("  h           Health dashboard"),
         row("  a           Add entry"),
         row("  f           Toggle favourite"),
         row("  d           Delete entry"),

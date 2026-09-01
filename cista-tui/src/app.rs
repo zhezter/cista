@@ -46,6 +46,7 @@ pub enum Screen {
     Locked,
     Confirm,
     Help,
+    Dashboard,
 }
 
 pub struct App {
@@ -81,6 +82,9 @@ pub struct App {
 
     /// Help screen state.
     pub help: HelpState,
+
+    /// Health dashboard screen.
+    pub dashboard: DashboardState,
 
     // Input
     mapper: ActionMapper,
@@ -162,6 +166,16 @@ pub struct ConfirmState {
 }
 
 pub struct HelpState {
+    pub scroll: u16,
+}
+
+pub struct DashboardState {
+    /// Entry ids ordered by health ascending (weakest first). Derived from
+    /// `all_entries` when the dashboard is opened.
+    pub rows: Vec<uuid::Uuid>,
+    /// Index into `rows` of the currently selected entry.
+    pub selected: usize,
+    /// Top scroll offset for the entry list.
     pub scroll: u16,
 }
 
@@ -387,6 +401,11 @@ impl App {
                 on_yes: None,
             },
             help: HelpState { scroll: 0 },
+            dashboard: DashboardState {
+                rows: Vec::new(),
+                selected: 0,
+                scroll: 0,
+            },
             mapper,
             status_message: None,
             status_error: None,
@@ -448,6 +467,7 @@ impl App {
             Screen::Locked => draw_lock_screen(f, self),
             Screen::Confirm => draw_confirm(f, self),
             Screen::Help => draw_help(f, self),
+            Screen::Dashboard => draw_dashboard(f, self),
         }
 
         if let Some(msg) = &self.status_message {
@@ -725,6 +745,7 @@ impl App {
             Screen::Locked => self.update_locked(action),
             Screen::Confirm => self.update_confirm(action),
             Screen::Help => self.update_help(action),
+            Screen::Dashboard => self.update_dashboard(action),
         }
     }
 
@@ -797,6 +818,7 @@ impl App {
             Action::CopyUsername => self.handle_copy_username(),
             Action::CopyUrl => self.handle_copy_url(),
             Action::Sort => self.handle_sort(),
+            Action::Dashboard => self.handle_dashboard(),
             Action::ToggleFavorite => self.handle_toggle_favorite(),
             _ => AppSignal::Continue,
         }
@@ -926,6 +948,65 @@ impl App {
             Action::Back => self.handle_back(),
             _ => AppSignal::Continue,
         }
+    }
+
+    fn update_dashboard(&mut self, action: Action) -> AppSignal {
+        match action {
+            Action::Quit => AppSignal::Quit,
+            Action::Help => self.handle_help(),
+            Action::Generate => self.handle_generate(),
+            Action::Up => {
+                self.dashboard.selected = self.dashboard.selected.saturating_sub(1);
+                AppSignal::Continue
+            }
+            Action::Down => {
+                if !self.dashboard.rows.is_empty()
+                    && self.dashboard.selected + 1 < self.dashboard.rows.len()
+                {
+                    self.dashboard.selected += 1;
+                }
+                AppSignal::Continue
+            }
+            Action::PageUp => {
+                self.dashboard.selected = self.dashboard.selected.saturating_sub(15);
+                AppSignal::Continue
+            }
+            Action::PageDown => {
+                if !self.dashboard.rows.is_empty() {
+                    self.dashboard.selected = (self.dashboard.selected + 15)
+                        .min(self.dashboard.rows.len() - 1);
+                }
+                AppSignal::Continue
+            }
+            Action::Home => {
+                self.dashboard.selected = 0;
+                AppSignal::Continue
+            }
+            Action::End => {
+                self.dashboard.selected = self.dashboard.rows.len().saturating_sub(1);
+                AppSignal::Continue
+            }
+            Action::Enter => self.open_dashboard_detail(),
+            Action::Back => self.handle_back(),
+            _ => AppSignal::Continue,
+        }
+    }
+
+    fn open_dashboard_detail(&mut self) -> AppSignal {
+        let Some(id) = self.dashboard.rows.get(self.dashboard.selected).copied() else {
+            return AppSignal::Continue;
+        };
+        if let Some(idx) = self
+            .entry_list
+            .entries
+            .iter()
+            .position(|e| e.id == id)
+        {
+            self.entry_detail.entry_idx = Some(idx);
+            self.entry_detail.show_password = false;
+            self.screen = Screen::EntryDetail;
+        }
+        AppSignal::Continue
     }
 
     fn handle_help(&mut self) -> AppSignal {
@@ -1345,6 +1426,17 @@ impl App {
         }
     }
 
+    fn handle_dashboard(&mut self) -> AppSignal {
+        self.previous_screen = Some(self.screen);
+        let mut rows: Vec<_> = self.entry_list.all_entries.iter().collect();
+        rows.sort_by_key(|e| e.health.score);
+        self.dashboard.rows = rows.iter().map(|e| e.id).collect();
+        self.dashboard.selected = 0;
+        self.dashboard.scroll = 0;
+        self.screen = Screen::Dashboard;
+        AppSignal::Continue
+    }
+
     fn handle_back(&mut self) -> AppSignal {
         match self.screen {
             Screen::Unlock => {
@@ -1392,6 +1484,9 @@ impl App {
             }
             Screen::Help => {
                 self.screen = self.previous_screen.unwrap_or(Screen::VaultList);
+            }
+            Screen::Dashboard => {
+                self.screen = Screen::EntryList;
             }
             _ => {}
         }
