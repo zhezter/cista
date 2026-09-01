@@ -25,6 +25,7 @@ enum ReplCommand {
     Add,
     Get(String),
     List,
+    Health,
     Search(Option<String>),
     Edit(String),
     Rm(String),
@@ -48,6 +49,7 @@ fn parse_command(line: &str) -> ReplCommand {
     match cmd {
         "add" => ReplCommand::Add,
         "list" | "ls" => ReplCommand::List,
+        "health" => ReplCommand::Health,
         "search" => {
             let term = if rest.is_empty() {
                 None
@@ -95,14 +97,14 @@ fn parse_command(line: &str) -> ReplCommand {
 }
 
 fn print_help() {
-    println!("commands: add, get <name>, list, search [term], edit <name>,");
+    println!("commands: add, get <name>, list, health, search [term], edit <name>,");
     println!("         rm <name>, passwd, generate [--length N] [--no-symbols]");
     println!("         lock, unlock, help, exit");
 }
 
 const COMMANDS: &[&str] = &[
-    "add", "get", "list", "search", "edit", "rm", "passwd", "generate", "lock", "unlock", "help",
-    "exit",
+    "add", "get", "list", "health", "search", "edit", "rm", "passwd", "generate", "lock",
+    "unlock", "help", "exit",
 ];
 
 /// Commands whose second argument is an entry name, completed from the vault.
@@ -214,6 +216,7 @@ fn run_command(
         }
         ReplCommand::Get(name) => handlers::apply_get(session.vault()?, &name, input, None)?,
         ReplCommand::List => handlers::apply_list(session.vault()?)?,
+        ReplCommand::Health => println!("{}", handlers::health_report(session.vault()?)),
         ReplCommand::Search(term) => handlers::apply_search(session.vault()?, term.as_deref())?,
         ReplCommand::Edit(name) => {
             let vault = session
@@ -373,6 +376,7 @@ mod tests {
     fn parses_basic_commands() {
         assert!(matches!(parse_command("list"), ReplCommand::List));
         assert!(matches!(parse_command("ls"), ReplCommand::List));
+        assert!(matches!(parse_command("health"), ReplCommand::Health));
         assert!(matches!(parse_command("add"), ReplCommand::Add));
         assert!(matches!(parse_command("lock"), ReplCommand::Lock));
         assert!(matches!(parse_command("unlock"), ReplCommand::Unlock));

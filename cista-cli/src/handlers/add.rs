@@ -47,6 +47,11 @@ pub fn apply_add(
             Secret::new(SecretString::from(generated))
         } else {
             let entered = Secret::new(SecretString::from(input.read_password("Entry password: ")?));
+            let confirm =
+                Secret::new(SecretString::from(input.read_password("Confirm password: ")?));
+            if entered.expose_secret().as_str() != confirm.expose_secret().as_str() {
+                anyhow::bail!("Passwords do not match");
+            }
             for warning in
                 cista_core::password_gen::password_feedback(entered.expose_secret().as_str())
             {

@@ -58,6 +58,11 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             let (vault, _password) = vault_session::unlock_vault(&path, input)?;
             handlers::apply_list(&vault)?
         }
+        Command::Health { mut path } => {
+            resolve_vault_path(&mut path)?;
+            let (vault, _password) = vault_session::unlock_vault(&path, input)?;
+            println!("{}", handlers::health_report(&vault));
+        }
         Command::Search { mut path, term } => {
             resolve_vault_path(&mut path)?;
             let (vault, _password) = vault_session::unlock_vault(&path, input)?;

@@ -34,6 +34,9 @@ pub fn apply_edit(
     let new_password = if new_password_raw.is_empty() {
         None
     } else {
+        for warning in cista_core::password_gen::password_feedback(&new_password_raw) {
+            eprintln!("{}: {}", crate::ui::warn("weak password"), warning);
+        }
         Some(Secret::new(SecretString::from(new_password_raw)))
     };
     let new_url = input.read_line(&format!("URL [{}]: ", current_url))?;

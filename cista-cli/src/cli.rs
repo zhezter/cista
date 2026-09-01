@@ -89,6 +89,13 @@ pub enum Command {
     List {
         path: PathBuf,
     },
+    /// Evaluate vault-wide password health (weakness, reuse, age).
+    ///
+    /// Prints one row per entry sorted weakest-first, mirroring the TUI's
+    /// health dashboard, plus a summary of weak/reused/strong counts.
+    Health {
+        path: PathBuf,
+    },
     Search {
         path: PathBuf,
         term: Option<String>,
