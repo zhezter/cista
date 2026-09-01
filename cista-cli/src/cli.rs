@@ -115,6 +115,22 @@ pub enum Command {
     Passwd {
         path: PathBuf,
     },
+    /// Export all entries in plaintext (decrypted) to CSV or JSON.
+    ///
+    /// This writes secrets in clear, so a confirmation prompt is shown unless
+    /// `--yes` is given. Output goes to stdout unless `--output` is provided.
+    Export {
+        path: PathBuf,
+        /// Output format.
+        #[arg(long, value_enum, default_value_t = ExportFormat::Json)]
+        format: ExportFormat,
+        /// Write to this file instead of stdout.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Skip the confirmation prompt.
+        #[arg(long)]
+        yes: bool,
+    },
     ListVaults,
     Open {
         path: PathBuf,
@@ -133,6 +149,14 @@ pub enum FieldSelector {
     Username,
     Url,
     Notes,
+}
+
+/// Output format for `export`.
+#[derive(clap::ValueEnum, Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ExportFormat {
+    Csv,
+    #[default]
+    Json,
 }
 
 #[cfg(test)]
@@ -297,5 +321,48 @@ mod tests {
         // Default is off.
         let cli = parse_line("get personal example --field password").expect("should parse");
         assert!(!cli.password_stdin);
+    }
+
+    #[test]
+    fn parse_line_export_defaults_to_json() {
+        let cli = parse_line("export personal").expect("'export personal' should parse");
+        match cli.cmd {
+            Command::Export {
+                path,
+                format,
+                output,
+                yes,
+            } => {
+                assert_eq!(path, PathBuf::from("personal"));
+                assert_eq!(format, ExportFormat::Json);
+                assert_eq!(output, None);
+                assert!(!yes);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_line_export_csv_with_flags() {
+        let cli = parse_line("export personal --format csv -o out.csv --yes").expect("should parse");
+        match cli.cmd {
+            Command::Export {
+                path,
+                format,
+                output,
+                yes,
+            } => {
+                assert_eq!(path, PathBuf::from("personal"));
+                assert_eq!(format, ExportFormat::Csv);
+                assert_eq!(output, Some(PathBuf::from("out.csv")));
+                assert!(yes);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_line_export_rejects_unknown_format() {
+        assert!(parse_line("export personal --format xml").is_err());
     }
 }

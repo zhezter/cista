@@ -87,6 +87,16 @@ fn run(cli: Cli) -> anyhow::Result<()> {
             let (mut vault, _old_password) = vault_session::unlock_vault(&path, input)?;
             handlers::apply_passwd(&mut vault, &path, input)?;
         }
+        Command::Export {
+            mut path,
+            format,
+            output,
+            yes,
+        } => {
+            resolve_vault_path(&mut path)?;
+            let (vault, _password) = vault_session::unlock_vault(&path, input)?;
+            handlers::apply_export(&vault, format, output.as_deref(), yes, input)?;
+        }
         Command::ListVaults => handlers::handle_list_vaults()?,
         Command::Open { mut path } => {
             resolve_vault_path(&mut path)?;

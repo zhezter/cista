@@ -1,5 +1,6 @@
 mod add;
 mod edit;
+mod export;
 mod generate;
 mod get;
 mod init;
@@ -12,6 +13,7 @@ mod search;
 
 pub use add::apply_add;
 pub use edit::apply_edit;
+pub use export::apply_export;
 pub use generate::handle_generate;
 pub use get::apply_get;
 pub use init::handle_init;
