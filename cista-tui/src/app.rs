@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::style::Color;
 use ratatui::Frame;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::TryRecvError;
 use std::time::{Duration, Instant};
 
@@ -60,6 +60,9 @@ pub struct App {
     /// Unlock / password screen.
     pub unlock: UnlockState,
 
+    /// Fingerprint quick-unlock state for the unlock screen.
+    pub quick_unlock: QuickUnlockState,
+
     /// Session (open vault + auto-lock) state.
     pub session: SessionState,
 
@@ -110,6 +113,19 @@ pub struct UnlockState {
     /// What the master-password screen is being used for: unlocking to open a
     /// vault, or confirming a password before deleting a vault.
     pub mode: UnlockMode,
+}
+
+/// Fingerprint quick-unlock affordance. The master password is still the real
+/// gate; the fingerprint only releases the copy stored in the OS keyring.
+pub struct QuickUnlockState {
+    pub enabled: bool,
+    pub detect_cmd: String,
+    pub verify_cmd: String,
+    /// True once the availability probe has run (reader present + secret
+    /// stored), so the unlock screen only offers a finger it can honour.
+    pub checked: bool,
+    pub available: bool,
+    pub has_secret: bool,
 }
 
 pub struct SessionState {
@@ -364,7 +380,9 @@ pub enum UnlockMode {
 impl App {
     pub fn new(keybindings: KeyBindings) -> Self {
         let mapper = ActionMapper::new(keybindings);
-        let auto_lock_seconds = Config::load().map(|c| c.auto_lock_seconds).unwrap_or(300);
+        let config = Config::load().unwrap_or_default();
+        let auto_lock_seconds = config.auto_lock_seconds;
+        let quick_unlock_cfg = config.quick_unlock;
         let mut app = Self {
             screen: Screen::VaultList,
             previous_screen: None,
@@ -376,6 +394,14 @@ impl App {
                 password: String::new(),
                 error: None,
                 mode: UnlockMode::Open,
+            },
+            quick_unlock: QuickUnlockState {
+                enabled: quick_unlock_cfg.enabled,
+                detect_cmd: quick_unlock_cfg.detect_cmd,
+                verify_cmd: quick_unlock_cfg.verify_cmd,
+                checked: false,
+                available: false,
+                has_secret: false,
             },
             session: SessionState {
                 vault_path: None,
@@ -533,16 +559,8 @@ impl App {
                     password,
                     result: Ok(vault),
                 } => {
-                    let _ = cista_core::config::record_opened(&path);
-                    self.session.vault_path = Some(path.clone());
-                    self.session.ui_state = cista_core::UiState::load_for_vault(&path);
-                    self.session.vault = Some(vault);
-                    self.session.master_password = Some(password);
-                    self.session.locked = false;
-                    self.session.last_activity = Instant::now();
-                    self.load_entries();
-                    self.screen = Screen::EntryList;
-                    self.set_status("Vault unlocked");
+                    self.persist_quick_unlock_secret(&path, &password);
+                    self.unlock_opened(path, vault, password, "Vault unlocked");
                 }
                 TaskResult::Unlock { result: Err(_), .. } => {
                     self.unlock.error = Some("Invalid master password".into());
@@ -591,6 +609,9 @@ impl App {
                     self.unlock.mode = UnlockMode::Open;
                     if let Some(path) = &self.session.vault_path {
                         cista_core::UiState::remove_for_vault(path);
+                        if let Some(account) = crate::quick_unlock::vault_account(path) {
+                            crate::quick_unlock::delete_secret(&account);
+                        }
                     }
                     self.load_vaults();
                     self.screen = Screen::VaultList;
@@ -620,6 +641,9 @@ impl App {
                     result: Ok(()),
                     password,
                 } => {
+                    if let Some(path) = self.session.vault_path.clone() {
+                        self.persist_quick_unlock_secret(&path, &password);
+                    }
                     self.session.master_password = Some(password);
                     let target = self.previous_screen.unwrap_or(Screen::EntryList);
                     self.reset_change_password();
@@ -632,6 +656,77 @@ impl App {
                 }
                 _ => {}
             },
+            TaskKind::QuickUnlockCheck => if let TaskResult::QuickUnlockCheck {
+                available,
+                has_secret,
+            } = result
+            {
+                self.quick_unlock.checked = true;
+                self.quick_unlock.available = available;
+                self.quick_unlock.has_secret = has_secret;
+            },
+            TaskKind::QuickUnlockVerify => {
+                if let TaskResult::QuickUnlockVerify {
+                    path,
+                    password,
+                    result,
+                } = result
+                {
+                    match (password, result) {
+                        (Some(password), Ok(vault)) => {
+                            self.unlock_opened(path, vault, password, "Vault unlocked (fingerprint)");
+                        }
+                        (None, _) => {
+                            self.unlock.error = Some("Fingerprint not accepted".into());
+                        }
+                        (Some(_), Err(_)) => {
+                            self.unlock.error = Some(
+                                "Fingerprint accepted, but the stored password is stale; type it here"
+                                    .into(),
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Shared post-unlock steps for both the typed-password and the
+    /// fingerprint paths.
+    fn unlock_opened(
+        &mut self,
+        path: PathBuf,
+        vault: Vault,
+        password: Secret<SecretString>,
+        status: &str,
+    ) {
+        let _ = cista_core::config::record_opened(&path);
+        self.session.vault_path = Some(path.clone());
+        self.session.ui_state = cista_core::UiState::load_for_vault(&path);
+        self.session.vault = Some(vault);
+        self.session.master_password = Some(password);
+        self.session.locked = false;
+        self.session.last_activity = Instant::now();
+        self.load_entries();
+        self.screen = Screen::EntryList;
+        self.set_status(status);
+    }
+
+    /// After a successful (typed-password or fingerprint) unlock, cache the
+    /// master password in the OS keyring so quick unlock can use it later.
+    /// Best-effort: without a Secret Service this silently degrades.
+    fn persist_quick_unlock_secret(&mut self, path: &Path, password: &Secret<SecretString>) {
+        if !self.quick_unlock.enabled {
+            return;
+        }
+        let Some(account) = crate::quick_unlock::vault_account(path) else {
+            return;
+        };
+        if crate::quick_unlock::store_secret(&account, password) {
+            self.quick_unlock.checked = true;
+            self.quick_unlock.has_secret = true;
+        } else {
+            crate::log::log_error(&format!("quick unlock: could not store secret for {path:?}"));
         }
     }
 
@@ -844,6 +939,7 @@ impl App {
             Action::Generate => self.handle_generate(),
             Action::Enter => self.handle_enter(),
             Action::Back => self.handle_back(),
+            Action::QuickUnlock => self.quick_unlock_action(),
             _ => AppSignal::Continue,
         }
     }
@@ -1374,6 +1470,7 @@ impl App {
                     self.screen = Screen::Unlock;
                     self.unlock.password.clear();
                     self.unlock.error = None;
+                    self.start_quick_unlock_check();
                 }
             }
             Screen::Unlock => {
@@ -1431,6 +1528,59 @@ impl App {
             started: Instant::now(),
             rx: tasks::spawn_unlock(path, password),
         });
+    }
+
+    /// Kicks off the fingerprint availability probe when entering the unlock
+    /// screen. Runs only when quick unlock is enabled; the result decides
+    /// whether the lock screen offers `[F] Fingerprint unlock`.
+    fn start_quick_unlock_check(&mut self) {
+        if !self.quick_unlock.enabled {
+            return;
+        }
+        let Some(path) = self.session.vault_path.clone() else {
+            return;
+        };
+        let Some(account) = crate::quick_unlock::vault_account(&path) else {
+            return;
+        };
+        self.quick_unlock.checked = false;
+        self.quick_unlock.available = false;
+        self.quick_unlock.has_secret = false;
+        self.pending = Some(PendingTask {
+            kind: TaskKind::QuickUnlockCheck,
+            started: Instant::now(),
+            rx: tasks::spawn_quick_unlock_check(self.quick_unlock.detect_cmd.clone(), account),
+        });
+    }
+
+    /// Attempts a fingerprint unlock: verifies the print, then opens the vault
+    /// with the stored master password. Runs entirely in the worker thread so
+    /// the argon2 work never freezes the event loop.
+    fn quick_unlock_action(&mut self) -> AppSignal {
+        if !self.quick_unlock.enabled
+            || !self.quick_unlock.checked
+            || !self.quick_unlock.available
+            || !self.quick_unlock.has_secret
+        {
+            return AppSignal::Continue;
+        }
+        let Some(path) = self.session.vault_path.clone() else {
+            return AppSignal::Continue;
+        };
+        let Some(account) = crate::quick_unlock::vault_account(&path) else {
+            return AppSignal::Continue;
+        };
+        self.unlock.error = None;
+        self.pending = Some(PendingTask {
+            kind: TaskKind::QuickUnlockVerify,
+            started: Instant::now(),
+            rx: tasks::spawn_quick_unlock_verify(
+                path,
+                self.quick_unlock.verify_cmd.clone(),
+                account,
+            ),
+        });
+        AppSignal::Continue
     }
 
     /// Verifies the vault's master password in a background task and, only if

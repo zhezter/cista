@@ -87,10 +87,20 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
     }
 
     // Hint
-    let hint = Paragraph::new(if deleting {
-        "[Enter] Delete vault  [Esc] Cancel  (secrets are not echoed)"
+    let fp_hint = if !deleting
+        && app.quick_unlock.enabled
+        && app.quick_unlock.checked
+        && app.quick_unlock.available
+        && app.quick_unlock.has_secret
+    {
+        "  [Ctrl+F] Fingerprint unlock"
     } else {
-        "[Enter] Unlock  [Esc] Back  (secrets are not echoed)"
+        ""
+    };
+    let hint = Paragraph::new(if deleting {
+        format!("[Enter] Delete vault  [Esc] Cancel  (secrets are not echoed){fp_hint}")
+    } else {
+        format!("[Enter] Unlock  [Esc] Back  (secrets are not echoed){fp_hint}")
     })
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center);

@@ -128,6 +128,7 @@ fn build_help_lines() -> Vec<Line<'static>> {
         row("  o           Sort: Name A-Z/Z-A, Modified, Created"),
         row("  h           Health dashboard"),
         row("  P           Change master password"),
+        row("  Ctrl+F     Fingerprint unlock (quick unlock)"),
         row("  a           Add entry"),
         row("  f           Toggle favourite"),
         row("  d           Delete entry"),

@@ -11,6 +11,7 @@ mod app;
 mod clipboard;
 mod keys;
 mod log;
+mod quick_unlock;
 mod screens;
 mod tasks;
 mod widgets;

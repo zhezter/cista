@@ -16,6 +16,42 @@ pub struct Config {
     /// Default password length for `cista generate` and `cista add --generate`.
     #[serde(rename = "default_generate_length")]
     pub default_generate_length: usize,
+    /// Device-local fingerprint quick unlock (opt-in).
+    #[serde(rename = "quick_unlock")]
+    pub quick_unlock: QuickUnlock,
+}
+
+/// Opt-in "quick unlock" that lets a fingerprint release the vault's master
+/// password, which is kept in the OS keyring of this device.
+///
+/// This is a convenience layer, not a second factor: the master password is
+/// still the real gate. The fingerprint only decides whether the stored copy
+/// is handed to the app, and `fprintd` resolves "who owns this device" for us.
+/// Both commands are strings run with `sh -c`; an empty string skips that step.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuickUnlock {
+    /// Master switch. Everything below is ignored while this is `false`.
+    pub enabled: bool,
+    /// Command that exits 0 when a fingerprint is usable (reader present and a
+    /// print enrolled for the current user). `fprintd-list "$USER"` returns 1
+    /// when no device is available, so the affordance is hidden automatically.
+    /// Empty string skips detection and always offers the finger.
+    pub detect_cmd: String,
+    /// Command that verifies the held fingerprint; exit 0 authenticates the
+    /// request. Override for development/testing, e.g. a stub that always
+    /// exits 0.
+    pub verify_cmd: String,
+}
+
+impl Default for QuickUnlock {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            detect_cmd: "fprintd-list \"$USER\"".to_string(),
+            verify_cmd: "fprintd-verify".to_string(),
+        }
+    }
 }
 
 impl Default for Config {
@@ -23,6 +59,7 @@ impl Default for Config {
         Self {
             auto_lock_seconds: 300,
             default_generate_length: 20,
+            quick_unlock: QuickUnlock::default(),
         }
     }
 }
@@ -50,7 +87,10 @@ pub fn config_path() -> CoreResult<PathBuf> {
 /// The metadata file is keyed by a hash of the vault's absolute path so that
 /// two vaults with the same file name in different directories (e.g.
 /// `~/a/foo.cista` and `~/b/foo.cista`) do not collide in the meta directory.
-fn meta_path(vault_path: &Path) -> CoreResult<PathBuf> {
+/// Stable key for a vault derived from its absolute path's hash, used to key
+/// per-vault data without leaking the path itself. Matches the metadata files
+/// in `~/.local/state/cista/meta`.
+pub fn vault_key(vault_path: &Path) -> CoreResult<String> {
     let abs = fs::canonicalize(vault_path).unwrap_or_else(|_| vault_path.to_path_buf());
     let mut key = String::new();
     {
@@ -63,6 +103,11 @@ fn meta_path(vault_path: &Path) -> CoreResult<PathBuf> {
             let _ = write!(key, "{byte:02x}");
         }
     }
+    Ok(key)
+}
+
+fn meta_path(vault_path: &Path) -> CoreResult<PathBuf> {
+    let key = vault_key(vault_path)?;
     let meta_dir = crate::paths::state_dir()?.join("meta");
     fs::create_dir_all(&meta_dir)?;
     Ok(meta_dir.join(format!("{key}.json")))

@@ -25,6 +25,8 @@ pub enum TaskKind {
     DeleteVault,
     VerifyPassword,
     ChangePassword,
+    QuickUnlockCheck,
+    QuickUnlockVerify,
 }
 
 impl TaskKind {
@@ -38,6 +40,8 @@ impl TaskKind {
             TaskKind::DeleteVault => "Deleting vault…",
             TaskKind::VerifyPassword => "Verifying password…",
             TaskKind::ChangePassword => "Saving vault…",
+            TaskKind::QuickUnlockCheck => "Checking fingerprint…",
+            TaskKind::QuickUnlockVerify => "Fingerprint…",
         }
     }
 }
@@ -73,6 +77,20 @@ pub enum TaskResult {
     ChangePassword {
         result: Result<(), String>,
         password: Secret<SecretString>,
+    },
+    /// Fingerprint availability probe: reports whether a reader is usable and
+    /// whether the keyring already holds a secret for this vault.
+    QuickUnlockCheck {
+        available: bool,
+        has_secret: bool,
+    },
+    /// Fingerprint verification outcome. `password` is `Some` when the verify
+    /// command accepted the fingerprint (the stored password may still be
+    /// wrong); `result` carries the vault when opening succeeded.
+    QuickUnlockVerify {
+        path: PathBuf,
+        password: Option<Secret<SecretString>>,
+        result: Result<Vault, String>,
     },
     /// The thread died before sending anything (only possible on a bug/panic).
     Failed,
@@ -176,6 +194,63 @@ pub fn spawn_change_password(
     std::thread::spawn(move || {
         let result = vault.save(&path, &password).map_err(|e| e.to_string());
         let _ = tx.send(TaskResult::ChangePassword { result, password });
+    });
+    rx
+}
+
+/// Probing whether a fingerprint is usable and whether a secret is already
+/// stored for this vault, so the unlock screen only offers the finger when it
+/// can actually be used.
+pub fn spawn_quick_unlock_check(
+    detect_cmd: String,
+    account: String,
+) -> Receiver<TaskResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let available = crate::quick_unlock::run_command_ok(&detect_cmd);
+        let has_secret = crate::quick_unlock::load_secret(&account).is_some();
+        let _ = tx.send(TaskResult::QuickUnlockCheck {
+            available,
+            has_secret,
+        });
+    });
+    rx
+}
+
+/// Runs the fingerprint verify command; on acceptance, releases the stored
+/// master password and opens the vault in the same worker, mirroring
+/// [`spawn_unlock`] so the argon2 work never blocks the event loop.
+pub fn spawn_quick_unlock_verify(
+    path: PathBuf,
+    verify_cmd: String,
+    account: String,
+) -> Receiver<TaskResult> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        if !crate::quick_unlock::run_command_ok(&verify_cmd) {
+            let _ = tx.send(TaskResult::QuickUnlockVerify {
+                path,
+                password: None,
+                result: Err("fingerprint not accepted".into()),
+            });
+            return;
+        }
+        let Some(password) = crate::quick_unlock::load_secret(&account) else {
+            let _ = tx.send(TaskResult::QuickUnlockVerify {
+                path,
+                password: None,
+                result: Err("no stored secret".into()),
+            });
+            return;
+        };
+        let result =
+            load_vault_from_path(&path, password.expose_secret().as_str().as_bytes())
+                .map_err(|e| e.to_string());
+        let _ = tx.send(TaskResult::QuickUnlockVerify {
+            path,
+            password: Some(password),
+            result,
+        });
     });
     rx
 }
