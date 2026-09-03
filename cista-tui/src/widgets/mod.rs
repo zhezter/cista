@@ -17,6 +17,29 @@ pub fn mask_password(pwd: &str) -> String {
     "•".repeat(pwd.chars().count())
 }
 
+/// Truncates `s` to at most `max_width` terminal cells (wide characters count
+/// as two), replacing the cut tail with `…`. The result never exceeds
+/// `max_width` cells. Used to keep long names from overflowing their pane.
+pub fn truncate(s: &str, max_width: u16) -> String {
+    let max = max_width as usize;
+    if UnicodeWidthStr::width(s) <= max {
+        return s.to_string();
+    }
+    // Reserve one cell for the ellipsis, so the total stays within `max`.
+    let budget = max.saturating_sub(1);
+    let mut out = String::new();
+    let mut width = 0usize;
+    for c in s.chars() {
+        let w = UnicodeWidthStr::width(c.to_string().as_str());
+        if width + w > budget {
+            break;
+        }
+        out.push(c);
+        width += w;
+    }
+    format!("{out}…")
+}
+
 /// Renders a byte size as `B`, `KB` or `MB`.
 pub fn human_size(bytes: u64) -> String {
     const KB: f64 = 1024.0;
@@ -51,4 +74,27 @@ pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_keeps_short_strings() {
+        assert_eq!(truncate("abc", 5), "abc");
+        assert_eq!(truncate("ab", 2), "ab");
+    }
+
+    #[test]
+    fn truncate_clips_by_cell_width_and_adds_ellipsis() {
+        assert_eq!(truncate("abcdef", 3), "ab…");
+        assert_eq!(truncate("abcdef", 4), "abc…");
+    }
+
+    #[test]
+    fn truncate_counts_wide_chars_as_two_cells() {
+        // 'é' is width 1; '你' is width 2 -> clipped after 2 cells.
+        assert_eq!(truncate("你abc", 3), "你…");
+    }
 }

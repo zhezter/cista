@@ -34,9 +34,8 @@ impl TaskKind {
         match self {
             TaskKind::Unlock => "Unlocking vault…",
             TaskKind::CreateVault => "Creating vault…",
-            TaskKind::SaveEntryAdd | TaskKind::SaveEntryEdit | TaskKind::SaveEntryDelete => {
-                "Saving vault…"
-            }
+            TaskKind::SaveEntryAdd | TaskKind::SaveEntryEdit => "Saving vault…",
+            TaskKind::SaveEntryDelete => "Deleting entry…",
             TaskKind::DeleteVault => "Deleting vault…",
             TaskKind::VerifyPassword => "Verifying password…",
             TaskKind::ChangePassword => "Saving vault…",

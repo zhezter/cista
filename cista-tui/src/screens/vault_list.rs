@@ -8,7 +8,7 @@ use ratatui::{
 use std::time::SystemTime;
 
 use crate::app::App;
-use crate::widgets::human_size;
+use crate::widgets::{human_size, truncate};
 
 pub fn draw_vault_list(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -86,13 +86,16 @@ fn draw_vault_table(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             .unwrap_or_else(|| "?".into());
         let last = v.last_opened.as_deref().unwrap_or("never");
         rows.push(ListItem::new(Line::from(vec![
-            Span::styled(format!("{:<20}", v.name), Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{:<20}", truncate(&v.name, 20)),
+                Style::default().fg(Color::White),
+            ),
             Span::styled(
                 format!("{:>8}", count),
                 Style::default().fg(Color::DarkGray),
             ),
             Span::styled(
-                format!("  {:<12}", last),
+                format!("  {:<12}", truncate(last, 12)),
                 Style::default().fg(Color::DarkGray),
             ),
         ])));
@@ -168,7 +171,7 @@ fn draw_vault_detail(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
             Line::from(vec![
                 Span::styled("Path: ", Style::default().fg(Color::Yellow)),
                 Span::styled(
-                    vault.path.display().to_string(),
+                    truncate(&vault.path.display().to_string(), area.width.saturating_sub(12)),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]),
