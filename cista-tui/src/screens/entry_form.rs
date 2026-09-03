@@ -9,19 +9,11 @@ use crate::app::{App, FormMode};
 use crate::widgets::{centered_rect, cursor_offset, mask_password, pills};
 
 pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
-    let area = centered_rect(70, 90, f.area());
+    let area = centered_rect(70, 80, f.area());
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
-            Constraint::Length(3), // name
-            Constraint::Length(3), // username
-            Constraint::Length(3), // password
-            Constraint::Length(3), // confirm password
-            Constraint::Length(3), // url
-            Constraint::Length(3), // notes
-            Constraint::Length(3), // icon
-            Constraint::Length(3), // entry type
             Constraint::Min(0),
             Constraint::Length(3),
         ])
@@ -51,18 +43,48 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
         app.entry_form.fields.icon.clone()
     };
     let fields = [
-        ("Service name", app.entry_form.fields.name.as_str(), 1, false),
-        ("Username", app.entry_form.fields.username.as_str(), 2, false),
-        ("Password", masked_pw.as_str(), 3, false),
-        ("Confirm password", masked_cf.as_str(), 4, false),
-        ("URL", app.entry_form.fields.url.as_str(), 5, false),
-        ("Notes", app.entry_form.fields.notes.as_str(), 6, false),
-        ("Icon", icon_display.as_str(), 7, false),
-        ("Type", app.entry_form.fields.entry_type.label(), 8, true),
+        ("Service name", app.entry_form.fields.name.as_str(), false),
+        ("Username", app.entry_form.fields.username.as_str(), false),
+        ("Password", masked_pw.as_str(), false),
+        ("Confirm password", masked_cf.as_str(), false),
+        ("URL", app.entry_form.fields.url.as_str(), false),
+        ("Notes", app.entry_form.fields.notes.as_str(), false),
+        ("Icon", icon_display.as_str(), true),
+        ("Type", app.entry_form.fields.entry_type.label(), true),
     ];
 
-    for (label, value, idx, is_type) in fields {
-        let is_active = app.entry_form.field_idx == idx - 1;
+    // The eight fields may exceed the available height on short terminals, so
+    // scroll vertically keeping the active field visible.
+    let field_area = chunks[1];
+    let field_rows: u16 = fields.len() as u16 * 3;
+    let max_visible = field_area.height.saturating_sub(1) / 3;
+    let active = app.entry_form.field_idx as u16;
+    let scroll = if field_rows > field_area.height - 1 && active >= max_visible {
+        active - max_visible + 1
+    } else {
+        0
+    };
+    let top_y = field_area.y.saturating_sub(scroll * 3);
+    let bottom = field_area.y + field_area.height;
+
+    for (idx, (label, value, is_selector)) in fields.iter().enumerate() {
+        let field_top = top_y + (idx as u16) * 3;
+        if field_top + 3 <= field_area.y || field_top >= bottom {
+            continue;
+        }
+        let chunk = ratatui::layout::Rect {
+            x: field_area.x,
+            y: field_top,
+            width: field_area.width,
+            height: 3,
+        };
+        // Clip the field to the modal's field area so a partially visible row
+        // never spills over the header or footer above/below.
+        let chunk = chunk.intersection(field_area);
+        if chunk.width == 0 || chunk.height == 0 {
+            continue;
+        }
+        let is_active = app.entry_form.field_idx == idx;
         let style = if is_active {
             Style::default()
                 .fg(Color::Yellow)
@@ -76,8 +98,7 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
             Style::default().fg(Color::DarkGray)
         };
         // Icon and Type are selectors cycled with Enter rather than text fields.
-        let is_selector = is_type || label == "Icon";
-        let title = if is_selector && is_active {
+        let title = if *is_selector && is_active {
             format!(" {}  (Enter: cycle) ", label)
         } else {
             format!(" {} ", label)
@@ -90,7 +111,14 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
                 .title(title)
                 .border_style(border_style),
         );
-        f.render_widget(input, chunks[idx]);
+        f.render_widget(input, chunk);
+
+        // Cursor for the active text field (skip the Icon and Type selectors);
+        // only when the whole field is visible so the caret never lands on a
+        // clipped edge.
+        if is_active && !is_selector && field_top >= field_area.y && field_top + 3 <= bottom {
+            f.set_cursor_position((chunk.x + 1 + cursor_offset(value), chunk.y + 1));
+        }
     }
 
     // Footer
@@ -108,14 +136,5 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));
-    f.render_widget(footer, chunks[10]);
-
-    // Cursor for the active text field (skip the Icon and Type selectors).
-    if let Some((label, value, idx, is_type)) = fields.get(app.entry_form.field_idx) {
-        let is_selector = *is_type || *label == "Icon";
-        if !is_selector {
-            let field_chunk = chunks[*idx];
-            f.set_cursor_position((field_chunk.x + 1 + cursor_offset(value), field_chunk.y + 1));
-        }
-    }
+    f.render_widget(footer, chunks[2]);
 }
