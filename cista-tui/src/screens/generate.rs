@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::app::{App, GenOption};
-use crate::widgets::centered_rect;
+use crate::widgets::{centered_rect, truncate};
 
 pub fn draw_generate(f: &mut Frame, app: &mut App) {
     let area = centered_rect(62, 70, f.area());
@@ -119,7 +119,7 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
     } else {
         "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Esc] Back"
     };
-    let footer = Paragraph::new(footer_text)
+    let footer = Paragraph::new(truncate(footer_text, chunks[3].width))
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));

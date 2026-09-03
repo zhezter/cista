@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::widgets::centered_rect;
+use crate::widgets::{centered_rect, truncate};
 
 pub fn draw_dashboard(f: &mut Frame, app: &mut App) {
     let area = centered_rect(78, 92, f.area());
@@ -25,9 +25,10 @@ pub fn draw_dashboard(f: &mut Frame, app: &mut App) {
     draw_header(f, app, chunks[0]);
     draw_list(f, app, chunks[1]);
 
-    let footer = Paragraph::new(
+    let footer = Paragraph::new(truncate(
         "[↑/↓] Navigate  [Enter] View  [Esc] Back to list  [q] Quit",
-    )
+        chunks[2].width,
+    ))
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center)
     .block(Block::default().borders(Borders::TOP));

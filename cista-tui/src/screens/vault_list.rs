@@ -43,9 +43,10 @@ pub fn draw_vault_list(f: &mut Frame, app: &mut App) {
     draw_vault_detail(f, app, main[1]);
 
     // Footer
-    let footer = Paragraph::new(
+    let footer = Paragraph::new(truncate(
         "[↑/↓] Navigate  [Enter] Open  [n] New  [Ctrl+g] Generate  [d] Delete  [q] Quit  [?] Help",
-    )
+        chunks[2].width,
+    ))
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center)
     .block(Block::default().borders(Borders::TOP));

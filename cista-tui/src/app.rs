@@ -246,10 +246,10 @@ pub struct EntryRow {
 pub enum SortMode {
     NameAsc,
     NameDesc,
-    UpdatedDesc,
     UpdatedAsc,
-    CreatedDesc,
+    UpdatedDesc,
     CreatedAsc,
+    CreatedDesc,
 }
 
 impl SortMode {
@@ -258,22 +258,22 @@ impl SortMode {
         match self {
             SortMode::NameAsc => "Name ↑",
             SortMode::NameDesc => "Name ↓",
-            SortMode::UpdatedDesc => "Modified ↓",
             SortMode::UpdatedAsc => "Modified ↑",
-            SortMode::CreatedDesc => "Created ↓",
+            SortMode::UpdatedDesc => "Modified ↓",
             SortMode::CreatedAsc => "Created ↑",
+            SortMode::CreatedDesc => "Created ↓",
         }
     }
 
-    /// Next mode in the cycling order.
+    /// Next mode in the cycling order: each field goes ↑ then ↓.
     pub fn next(self) -> Self {
         match self {
             SortMode::NameAsc => SortMode::NameDesc,
-            SortMode::NameDesc => SortMode::UpdatedDesc,
-            SortMode::UpdatedDesc => SortMode::UpdatedAsc,
-            SortMode::UpdatedAsc => SortMode::CreatedDesc,
-            SortMode::CreatedDesc => SortMode::CreatedAsc,
-            SortMode::CreatedAsc => SortMode::NameAsc,
+            SortMode::NameDesc => SortMode::UpdatedAsc,
+            SortMode::UpdatedAsc => SortMode::UpdatedDesc,
+            SortMode::UpdatedDesc => SortMode::CreatedAsc,
+            SortMode::CreatedAsc => SortMode::CreatedDesc,
+            SortMode::CreatedDesc => SortMode::NameAsc,
         }
     }
 }

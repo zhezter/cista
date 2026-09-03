@@ -125,7 +125,7 @@ fn build_help_lines() -> Vec<Line<'static>> {
         row("  PgUp/PgDn   Page up/down"),
         row("  Home/End    First/last"),
         row("  /           Search (type to filter)"),
-        row("  o           Sort: Name ↑/↓, Modified ↓/↑, Created ↓/↑"),
+        row("  o           Sort: Name ↑/↓, Modified ↑/↓, Created ↑/↓"),
         row("  h           Health dashboard"),
         row("  P           Change master password"),
         row("  Ctrl+F     Fingerprint unlock (quick unlock)"),

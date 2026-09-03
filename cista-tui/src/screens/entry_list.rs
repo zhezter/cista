@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
+use crate::widgets::truncate;
 
 pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -42,7 +43,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
         )
     };
 
-    let header = Paragraph::new(header_text)
+    let header = Paragraph::new(truncate(&header_text, chunks[0].width))
         .style(
             Style::default()
                 .fg(Color::Cyan)
@@ -69,7 +70,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
         "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [a] Add  [Ctrl+g] Generate  [f] Favourite  [d] Delete  [Enter] View  [c] Copy pass  [q] Quit  [?] Help"
     };
 
-    let footer = Paragraph::new(footer_text)
+    let footer = Paragraph::new(truncate(footer_text, chunks[2].width))
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));
