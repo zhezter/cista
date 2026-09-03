@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::app::{App, GenOption};
-use crate::widgets::{centered_rect, truncate};
+use crate::widgets::{centered_rect, pills};
 
 pub fn draw_generate(f: &mut Frame, app: &mut App) {
     let area = centered_rect(62, 70, f.area());
@@ -113,13 +113,36 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
         f.render_widget(result, chunks[2]);
     }
 
-    // Footer
-    let footer_text = if app.generate.from_form {
-        "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Ctrl+g] Apply to form  [Esc] Cancel"
+    // Footer (keybinding pills)
+    let footer_pills = if app.generate.from_form {
+        pills(
+            &[
+                ("↑/↓", "Move"),
+                ("Space", "Toggle"),
+                ("←/→", "Change"),
+                ("Enter", "Generate"),
+                ("r", "Reroll"),
+                ("c", "Copy"),
+                ("Ctrl+g", "Apply"),
+                ("Esc", "Cancel"),
+            ],
+            None,
+        )
     } else {
-        "[↑/↓] Move  [Space] Toggle  [←/→] Change  [Enter] Generate  [r] Reroll  [c] Copy  [Esc] Back"
+        pills(
+            &[
+                ("↑/↓", "Move"),
+                ("Space", "Toggle"),
+                ("←/→", "Change"),
+                ("Enter", "Generate"),
+                ("r", "Reroll"),
+                ("c", "Copy"),
+                ("Esc", "Back"),
+            ],
+            None,
+        )
     };
-    let footer = Paragraph::new(truncate(footer_text, chunks[3].width))
+    let footer = Paragraph::new(ratatui::text::Line::from(footer_pills))
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));

@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::widgets::truncate;
+use crate::widgets::{pills, truncate};
 
 pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
@@ -63,14 +63,36 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     draw_entry_table(f, app, main[0]);
     draw_entry_detail_pane(f, app, main[1]);
 
-    // Footer
-    let footer_text = if app.entry_list.in_search {
-        "Type to filter  [Esc] Clear search  [↑/↓] Navigate  [Enter] View"
+    // Footer (keybinding pills)
+    let footer_pills = if app.entry_list.in_search {
+        pills(
+            &[
+                ("Esc", "Clear search"),
+                ("↑/↓", "Navigate"),
+                ("Enter", "View"),
+            ],
+            None,
+        )
     } else {
-        "[↑/↓] Navigate  [PgUp/PgDn] Page  [/] Search  [a] Add  [Ctrl+g] Generate  [f] Favourite  [d] Delete  [Enter] View  [c] Copy pass  [q] Quit  [?] Help"
+        pills(
+            &[
+                ("↑/↓", "Navigate"),
+                ("PgUp/PgDn", "Page"),
+                ("/", "Search"),
+                ("a", "Add"),
+                ("Ctrl+g", "Generate"),
+                ("f", "Favourite"),
+                ("d", "Delete"),
+                ("Enter", "View"),
+                ("c", "Copy pass"),
+                ("q", "Quit"),
+                ("?", "Help"),
+            ],
+            None,
+        )
     };
 
-    let footer = Paragraph::new(truncate(footer_text, chunks[2].width))
+    let footer = Paragraph::new(ratatui::text::Line::from(footer_pills))
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));

@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::widgets::centered_rect;
+use crate::widgets::{centered_rect, pills};
 
 pub fn draw_help(f: &mut Frame, app: &mut App) {
     let area = centered_rect(62, 90, f.area());
@@ -79,11 +79,18 @@ pub fn draw_help(f: &mut Frame, app: &mut App) {
         );
     }
 
-    let footer =
-        Paragraph::new("[↑/↓] Scroll  [PgUp/PgDn] Page  [Home/End] Top/Bottom  [q] or [?] Close")
-            .style(Style::default().fg(Color::DarkGray))
-            .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::TOP));
+    let footer = Paragraph::new(ratatui::text::Line::from(pills(
+        &[
+            ("↑/↓", "Scroll"),
+            ("PgUp/PgDn", "Page"),
+            ("Home/End", "Top/Bottom"),
+            ("q/?", "Close"),
+        ],
+        None,
+    )))
+    .style(Style::default().fg(Color::DarkGray))
+    .alignment(Alignment::Center)
+    .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[2]);
 }
 

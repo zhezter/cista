@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::widgets::centered_rect;
+use crate::widgets::{centered_rect, pills};
 
 pub fn draw_confirm(f: &mut Frame, app: &mut App) {
     let area = centered_rect(50, 20, f.area());
@@ -42,9 +42,12 @@ pub fn draw_confirm(f: &mut Frame, app: &mut App) {
     f.render_widget(msg, chunks[1]);
 
     // Buttons
-    let buttons = Paragraph::new("[Enter] Yes  [Esc] No")
-        .style(Style::default().fg(Color::DarkGray))
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::TOP));
+    let buttons = Paragraph::new(ratatui::text::Line::from(pills(
+        &[("Enter", "Yes"), ("Esc", "No")],
+        None,
+    )))
+    .style(Style::default().fg(Color::DarkGray))
+    .alignment(Alignment::Center)
+    .block(Block::default().borders(Borders::TOP));
     f.render_widget(buttons, chunks[2]);
 }

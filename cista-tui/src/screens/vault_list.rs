@@ -8,28 +8,20 @@ use ratatui::{
 use std::time::SystemTime;
 
 use crate::app::App;
-use crate::widgets::{human_size, truncate};
+use crate::widgets::{draw_banner, human_size, pills, truncate};
 
 pub fn draw_vault_list(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
+            Constraint::Length(7),
             Constraint::Min(0),
             Constraint::Length(3),
         ])
         .split(f.area());
 
-    // Title
-    let title = Paragraph::new("CISTA - Vault Selector")
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::BOTTOM));
-    f.render_widget(title, chunks[0]);
+    // Banner
+    draw_banner(f, chunks[0], Color::Cyan);
 
     // Split the main zone into the vault list (left) and a detail pane for the
     // currently selected vault (right), so the empty space carries useful info
@@ -42,11 +34,19 @@ pub fn draw_vault_list(f: &mut Frame, app: &mut App) {
     draw_vault_table(f, app, main[0]);
     draw_vault_detail(f, app, main[1]);
 
-    // Footer
-    let footer = Paragraph::new(truncate(
-        "[↑/↓] Navigate  [Enter] Open  [n] New  [Ctrl+g] Generate  [d] Delete  [q] Quit  [?] Help",
-        chunks[2].width,
-    ))
+    // Footer (keybinding pills)
+    let footer = Paragraph::new(ratatui::text::Line::from(pills(
+        &[
+            ("↑/↓", "Navigate"),
+            ("Enter", "Open"),
+            ("n", "New"),
+            ("Ctrl+g", "Generate"),
+            ("d", "Delete"),
+            ("q", "Quit"),
+            ("?", "Help"),
+        ],
+        None,
+    )))
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center)
     .block(Block::default().borders(Borders::TOP));

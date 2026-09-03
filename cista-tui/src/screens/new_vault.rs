@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::widgets::{centered_rect, cursor_offset, mask_password};
+use crate::widgets::{centered_rect, cursor_offset, mask_password, pills};
 
 pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
     let area = centered_rect(60, 55, f.area());
@@ -86,11 +86,19 @@ pub fn draw_new_vault(f: &mut Frame, app: &mut App) {
     }
 
     // Footer
-    let footer = Paragraph::new(
-        "[Tab] Next  [Shift+Tab] Prev  [Ctrl+s] Create  [Esc] Cancel  (secrets are not echoed)",
-    )
-    .style(Style::default().fg(Color::DarkGray))
-    .alignment(Alignment::Center)
-    .block(Block::default().borders(Borders::TOP));
+    let mut footer_spans = pills(
+        &[
+            ("Tab", "Next"),
+            ("Shift+Tab", "Prev"),
+            ("Ctrl+s", "Create"),
+            ("Esc", "Cancel"),
+        ],
+        None,
+    );
+    footer_spans.push(ratatui::text::Span::raw("  (secrets are not echoed)"));
+    let footer = Paragraph::new(ratatui::text::Line::from(footer_spans))
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[5]);
 }

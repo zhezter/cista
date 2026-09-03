@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::app::{App, FormMode};
-use crate::widgets::{centered_rect, cursor_offset, mask_password};
+use crate::widgets::{centered_rect, cursor_offset, mask_password, pills};
 
 pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     let area = centered_rect(70, 90, f.area());
@@ -94,12 +94,20 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
     }
 
     // Footer
-    let footer = Paragraph::new(
-        "[Tab] Shift+Tab Next/Prev  [Ctrl+s] Save  [Esc] Back  (secrets are not echoed)",
-    )
-    .style(Style::default().fg(Color::DarkGray))
-    .alignment(Alignment::Center)
-    .block(Block::default().borders(Borders::TOP));
+    let mut footer_spans = pills(
+        &[
+            ("Tab", "Next"),
+            ("Shift+Tab", "Prev"),
+            ("Ctrl+s", "Save"),
+            ("Esc", "Back"),
+        ],
+        None,
+    );
+    footer_spans.push(ratatui::text::Span::raw("  (secrets are not echoed)"));
+    let footer = Paragraph::new(ratatui::text::Line::from(footer_spans))
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center)
+        .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[10]);
 
     // Cursor for the active text field (skip the Icon and Type selectors).

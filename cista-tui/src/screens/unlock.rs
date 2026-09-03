@@ -1,42 +1,30 @@
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
+    text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
     Frame,
 };
 
 use crate::app::{App, UnlockMode};
-use crate::widgets::{centered_rect, cursor_offset};
-
-const WORDMARK: &str = " ####  #####   ####   #####   ### \n\
-                        #        #    #         #    #   #\n\
-                        #        #     ####     #    #####\n\
-                        #        #         #    #    #   #\n\
-                         ####  #####   ####     #    #   #";
+use crate::widgets::{centered_rect, cursor_offset, draw_banner, pills};
 
 pub fn draw_unlock(f: &mut Frame, app: &mut App) {
     let area = centered_rect(62, 66, f.area());
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(5), // wordmark
+            Constraint::Length(7), // banner
             Constraint::Length(3), // vault
             Constraint::Length(3), // password
             Constraint::Length(1), // error
-            Constraint::Length(2), // hint
+            Constraint::Length(1), // hint
             Constraint::Min(0),
         ])
         .split(area);
 
-    // Wordmark, centred as a single block (equal-width lines keep it square).
-    let art = Paragraph::new(WORDMARK)
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .alignment(Alignment::Center);
-    f.render_widget(art, chunks[0]);
+    // Wordmark, tinted cyan.
+    draw_banner(f, chunks[0], Color::Cyan);
 
     let deleting = app.unlock.mode == UnlockMode::Delete;
 
@@ -86,24 +74,32 @@ pub fn draw_unlock(f: &mut Frame, app: &mut App) {
         f.render_widget(error, chunks[3]);
     }
 
-    // Hint
-    let fp_hint = if !deleting
+    // Hint (keybinding pills)
+    let mut hint_spans = if deleting {
+        pills(
+            &[
+                ("Enter", "Delete vault"),
+                ("Esc", "Cancel"),
+            ],
+            None,
+        )
+    } else {
+        pills(&[("Enter", "Unlock"), ("Esc", "Back")], None)
+    };
+    hint_spans.push(Span::raw("  (secrets are not echoed)"));
+    if !deleting
         && app.quick_unlock.enabled
         && app.quick_unlock.checked
         && app.quick_unlock.available
         && app.quick_unlock.has_secret
     {
-        "  [Ctrl+F] Fingerprint unlock"
-    } else {
-        ""
-    };
-    let hint = Paragraph::new(if deleting {
-        format!("[Enter] Delete vault  [Esc] Cancel  (secrets are not echoed){fp_hint}")
-    } else {
-        format!("[Enter] Unlock  [Esc] Back  (secrets are not echoed){fp_hint}")
-    })
-    .style(Style::default().fg(Color::DarkGray))
-    .alignment(Alignment::Center);
+        hint_spans.push(Span::raw("   "));
+        hint_spans.push(Span::styled("[Ctrl+F]", Style::default().fg(Color::Cyan)));
+        hint_spans.push(Span::raw(" Fingerprint unlock"));
+    }
+    let hint = Paragraph::new(Line::from(hint_spans))
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center);
     f.render_widget(hint, chunks[4]);
 
     // Cursor position for password input

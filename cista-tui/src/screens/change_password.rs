@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::app::{App, ChangeStage};
-use crate::widgets::{centered_rect, cursor_offset};
+use crate::widgets::{centered_rect, cursor_offset, pills};
 
 pub fn draw_change_password(f: &mut Frame, app: &mut App) {
     let area = centered_rect(62, 45, f.area());
@@ -69,7 +69,16 @@ pub fn draw_change_password(f: &mut Frame, app: &mut App) {
         ChangeStage::New => "Step 2/3 · choose a new master password",
         ChangeStage::Confirm => "Step 3/3 · re-type the new password",
     };
-    let hint = Paragraph::new(format!("{stage_label}   [Enter] Continue  [Esc] Cancel"))
+    let mut hint_spans = pills(
+        &[("Enter", "Continue"), ("Esc", "Cancel")],
+        None,
+    );
+    hint_spans.push(ratatui::text::Span::raw("   "));
+    hint_spans.push(ratatui::text::Span::styled(
+        stage_label,
+        Style::default().fg(Color::DarkGray),
+    ));
+    let hint = Paragraph::new(ratatui::text::Line::from(hint_spans))
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center);
     f.render_widget(hint, chunks[3]);

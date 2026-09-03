@@ -8,7 +8,7 @@ use ratatui::{
 use secrecy::ExposeSecret;
 
 use crate::app::App;
-use crate::widgets::centered_rect;
+use crate::widgets::{centered_rect, pills};
 
 pub fn draw_entry_detail(f: &mut Frame, app: &mut App) {
     let area = centered_rect(70, 70, f.area());
@@ -85,9 +85,18 @@ pub fn draw_entry_detail(f: &mut Frame, app: &mut App) {
     }
 
     // Footer
-    let footer = Paragraph::new(
-        "[Space] Reveal  [c] Copy pass  [u] Copy user  [l] Copy URL  [e] Edit  [d] Delete  [Esc] Back",
-    )
+    let footer = Paragraph::new(ratatui::text::Line::from(pills(
+        &[
+            ("Space", "Reveal"),
+            ("c", "Copy pass"),
+            ("u", "Copy user"),
+            ("l", "Copy URL"),
+            ("e", "Edit"),
+            ("d", "Delete"),
+            ("Esc", "Back"),
+        ],
+        None,
+    )))
     .style(Style::default().fg(Color::DarkGray))
     .alignment(Alignment::Center)
     .block(Block::default().borders(Borders::TOP));
