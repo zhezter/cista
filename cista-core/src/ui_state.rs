@@ -33,6 +33,11 @@ pub struct EntryUi {
     icon: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     entry_type: Option<EntryType>,
+    /// Free-text category label used to group and filter entries. Kept as
+    /// presentation metadata alongside favourites/icons, so changing it is an
+    /// instant JSON write instead of a full vault re-seal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    group: Option<String>,
 }
 
 impl UiState {
@@ -118,6 +123,17 @@ impl UiState {
             .unwrap_or_default()
     }
 
+    /// Set the free-text group label for `id` (clears it with `None`).
+    pub fn set_group(&mut self, id: Uuid, group: Option<String>) {
+        let cleaned = group.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+        self.entry_ui_mut(id).group = cleaned;
+    }
+
+    /// The group label for `id`, if any.
+    pub fn group(&self, id: Uuid) -> Option<&str> {
+        self.entries.get(&id).and_then(|e| e.group.as_deref())
+    }
+
     /// Remove all metadata for `id` (used when an entry is deleted).
     pub fn remove_entry(&mut self, id: Uuid) {
         self.favourites.remove(&id);
@@ -196,6 +212,7 @@ mod tests {
         let mut s = UiState::new();
         s.set_icon(id, Some("  star  ".to_string()));
         s.set_entry_type(id, EntryType::Card);
+        s.set_group(id, Some("  Work  ".to_string()));
         s.toggle_favourite(id);
         s.save_for_vault(&vault_path).expect("save");
 
@@ -203,7 +220,19 @@ mod tests {
         assert!(loaded.is_favourite(id));
         assert_eq!(loaded.icon(id), Some("star"));
         assert_eq!(loaded.entry_type(id), EntryType::Card);
+        assert_eq!(loaded.group(id), Some("Work"));
         assert_eq!(loaded.display_icon(id), "star");
+    }
+
+    #[test]
+    fn set_group_none_clears_it() {
+        let id = Uuid::new_v4();
+        let mut s = UiState::new();
+        assert_eq!(s.group(id), None);
+        s.set_group(id, Some("work".to_string()));
+        assert_eq!(s.group(id), Some("work"));
+        s.set_group(id, None);
+        assert_eq!(s.group(id), None);
     }
 
     #[test]

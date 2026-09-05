@@ -14,7 +14,7 @@ pub fn apply_search(vault: &Vault, term: Option<&str>) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    println!("{}", render_entries(matches));
+    println!("{}", render_entries(matches, None));
 
     Ok(())
 }

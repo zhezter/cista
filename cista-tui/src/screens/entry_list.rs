@@ -7,19 +7,21 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::widgets::{pills, truncate};
+use crate::widgets::{pills_fit, truncate};
 
 pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
+            Constraint::Length(2),
             Constraint::Min(0),
             Constraint::Length(3),
         ])
         .split(f.area());
 
-    // Header with vault name and search
+    // Top bar: vault identity + status, and the quick actions previously
+    // crammed into the footer.
     let vault_name = app
         .session.vault_path
         .as_ref()
@@ -28,22 +30,29 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
         .map(|n| n.trim_end_matches(".cista"))
         .unwrap_or("unknown");
 
-    let header_text = if app.entry_list.in_search {
+    let identity_text = if app.entry_list.in_search {
         format!("🔍 Search: {}_", app.entry_list.search_query)
     } else {
         let health = app
             .health_summary()
             .map(|h| format!("  Health: {h}   "))
             .unwrap_or_default();
+        let group = app
+            .entry_list
+            .group_filter
+            .as_deref()
+            .map(|g| format!("  Group: {g}  "))
+            .unwrap_or_default();
         format!(
-            "{}  🔓  {}[o]Sort: {}  [L]Lock",
+            "{}  🔓  {}{}[o]Sort: {}  [L]Lock",
             vault_name,
             health,
+            group,
             app.entry_list.sort_mode.label()
         )
     };
 
-    let header = Paragraph::new(truncate(&header_text, chunks[0].width))
+    let header = Paragraph::new(truncate(&identity_text, chunks[0].width))
         .style(
             Style::default()
                 .fg(Color::Cyan)
@@ -53,42 +62,60 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
         .block(Block::default().borders(Borders::BOTTOM));
     f.render_widget(header, chunks[0]);
 
+    // Action bar: the per-row / create commands that used to crowd the footer.
+    let action_bar = Paragraph::new(ratatui::text::Line::from(pills_fit(
+        &[
+            ("/", "Search"),
+            ("a", "Add"),
+            ("Ctrl+g", "Generate"),
+            ("f", "Favourite"),
+            ("d", "Delete"),
+            ("g", "Group"),
+            ("b", "Browse"),
+        ],
+        Some(Color::LightBlue),
+        chunks[1].width,
+    )))
+    .style(Style::default().fg(Color::DarkGray))
+    .alignment(Alignment::Left)
+    .block(Block::default().borders(Borders::BOTTOM));
+    f.render_widget(action_bar, chunks[1]);
+
     // Split the main zone into the entries table (left) and a detail pane for
     // the selected entry (right), keepassxc-style.
     let main = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(62), Constraint::Percentage(38)])
-        .split(chunks[1]);
+        .split(chunks[2]);
 
     draw_entry_table(f, app, main[0]);
     draw_entry_detail_pane(f, app, main[1]);
 
-    // Footer (keybinding pills)
+    // Footer (keybinding pills): navigation + view essentials; per-row/create
+    // commands live in the action bar at the top.
     let footer_pills = if app.entry_list.in_search {
-        pills(
+        pills_fit(
             &[
                 ("Esc", "Clear search"),
                 ("↑/↓", "Navigate"),
                 ("Enter", "View"),
             ],
             None,
+            chunks[3].width,
         )
     } else {
-        pills(
+        pills_fit(
             &[
                 ("↑/↓", "Navigate"),
                 ("PgUp/PgDn", "Page"),
-                ("/", "Search"),
-                ("a", "Add"),
-                ("Ctrl+g", "Generate"),
-                ("f", "Favourite"),
-                ("d", "Delete"),
                 ("Enter", "View"),
                 ("c", "Copy pass"),
+                ("u", "Copy user"),
                 ("q", "Quit"),
                 ("?", "Help"),
             ],
             None,
+            chunks[3].width,
         )
     };
 
@@ -96,7 +123,7 @@ pub fn draw_entry_list(f: &mut Frame, app: &mut App) {
         .style(Style::default().fg(Color::DarkGray))
         .alignment(Alignment::Center)
         .block(Block::default().borders(Borders::TOP));
-    f.render_widget(footer, chunks[2]);
+    f.render_widget(footer, chunks[3]);
 }
 
 /// Aligned multi-column table of entries (title | username | modified | url).
@@ -241,6 +268,17 @@ fn draw_entry_detail_pane(f: &mut Frame, app: &App, area: ratatui::layout::Rect)
             Span::styled(
                 format!("{} {}", e.icon, e.entry_type.label()),
                 Style::default().fg(Color::Cyan),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("Group: ", Style::default().fg(Color::Yellow)),
+            Span::styled(
+                e.group.as_deref().unwrap_or("-"),
+                if e.group.is_some() {
+                    Style::default().fg(Color::Cyan)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                },
             ),
         ]),
         Line::from(""),

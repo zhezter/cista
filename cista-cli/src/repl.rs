@@ -215,7 +215,7 @@ fn run_command(
             handlers::apply_add(vault, &session.path, password, input, false, 20)?;
         }
         ReplCommand::Get(name) => handlers::apply_get(session.vault()?, &name, input, None)?,
-        ReplCommand::List => handlers::apply_list(session.vault()?)?,
+        ReplCommand::List => handlers::apply_list(session.vault()?, &session.path, None)?,
         ReplCommand::Health => println!("{}", handlers::health_report(session.vault()?)),
         ReplCommand::Search(term) => handlers::apply_search(session.vault()?, term.as_deref())?,
         ReplCommand::Edit(name) => {

@@ -8,6 +8,9 @@ use ratatui::{
 use crate::app::{App, GenOption};
 use crate::widgets::{centered_rect, pills};
 
+/// A row of `(key, action)` pairs rendered as keybinding pills.
+type PillRow = &'static [(&'static str, &'static str)];
+
 pub fn draw_generate(f: &mut Frame, app: &mut App) {
     let area = centered_rect(62, 70, f.area());
     let chunks = Layout::default()
@@ -113,38 +116,40 @@ pub fn draw_generate(f: &mut Frame, app: &mut App) {
         f.render_widget(result, chunks[2]);
     }
 
-    // Footer (keybinding pills)
-    let footer_pills = if app.generate.from_form {
-        pills(
+    // Footer (keybinding pills) split across two rows so it never overflows the
+    // popup width.
+    let (row1, row2): (PillRow, PillRow) = if app.generate.from_form {
+        (
             &[
                 ("↑/↓", "Move"),
                 ("Space", "Toggle"),
                 ("←/→", "Change"),
                 ("Enter", "Generate"),
+            ],
+            &[
                 ("r", "Reroll"),
                 ("c", "Copy"),
                 ("Ctrl+g", "Apply"),
                 ("Esc", "Cancel"),
             ],
-            None,
         )
     } else {
-        pills(
+        (
             &[
                 ("↑/↓", "Move"),
                 ("Space", "Toggle"),
                 ("←/→", "Change"),
                 ("Enter", "Generate"),
-                ("r", "Reroll"),
-                ("c", "Copy"),
-                ("Esc", "Back"),
             ],
-            None,
+            &[("r", "Reroll"), ("c", "Copy"), ("Esc", "Back")],
         )
     };
-    let footer = Paragraph::new(ratatui::text::Line::from(footer_pills))
-        .style(Style::default().fg(Color::DarkGray))
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::TOP));
+    let footer = Paragraph::new(vec![
+        ratatui::text::Line::from(pills(row1, None)),
+        ratatui::text::Line::from(pills(row2, None)),
+    ])
+    .style(Style::default().fg(Color::DarkGray))
+    .alignment(Alignment::Center)
+    .block(Block::default().borders(Borders::TOP));
     f.render_widget(footer, chunks[3]);
 }

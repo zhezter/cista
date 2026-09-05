@@ -33,6 +33,8 @@ pub struct KeyBindings {
     pub dashboard: KeyBinding,
     pub change_password: KeyBinding,
     pub quick_unlock: KeyBinding,
+    pub open_url: KeyBinding,
+    pub group_filter: KeyBinding,
     pub tab_next: KeyBinding,
     pub tab_prev: KeyBinding,
     /// Shift+Tab is reported as `BackTab` by crossterm on most terminals, but
@@ -90,6 +92,8 @@ impl Default for KeyBindings {
             dashboard: kb(Char('h'), KeyModifiers::NONE),
             change_password: kb(Char('P'), KeyModifiers::SHIFT),
             quick_unlock: kb(Char('f'), KeyModifiers::CONTROL),
+            open_url: kb(Char('b'), KeyModifiers::NONE),
+            group_filter: kb(Char('g'), KeyModifiers::NONE),
             tab_next: kb(Tab, KeyModifiers::NONE),
             tab_prev: kb(BackTab, KeyModifiers::SHIFT),
             tab_prev_shift: kb(Tab, KeyModifiers::SHIFT),
@@ -152,6 +156,8 @@ const BOUND: &[Binding] = &[
     (Action::Dashboard, |b| &b.dashboard),
     (Action::ChangePassword, |b| &b.change_password),
     (Action::QuickUnlock, |b| &b.quick_unlock),
+    (Action::OpenUrl, |b| &b.open_url),
+    (Action::GroupFilter, |b| &b.group_filter),
 ];
 
 impl ActionMapper {
@@ -215,6 +221,8 @@ pub enum Action {
     ChangePassword,
     QuickUnlock,
     ToggleFavorite,
+    OpenUrl,
+    GroupFilter,
     TabNext,
     TabPrev,
     Save,

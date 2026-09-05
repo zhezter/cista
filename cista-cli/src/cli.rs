@@ -88,6 +88,9 @@ pub enum Command {
     },
     List {
         path: PathBuf,
+        /// Show only entries in this group (exact, case-insensitive match).
+        #[arg(short, long)]
+        group: Option<String>,
     },
     /// Evaluate vault-wide password health (weakness, reuse, age).
     ///
@@ -218,7 +221,22 @@ mod tests {
     fn parse_line_reuses_command_surface() {
         let cli = parse_line("list personal").expect("'list personal' should parse");
         match cli.cmd {
-            Command::List { path } => assert_eq!(path, PathBuf::from("personal")),
+            Command::List { path, group } => {
+                assert_eq!(path, PathBuf::from("personal"));
+                assert!(group.is_none());
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_list_group_flag() {
+        let cli = parse_line("list personal --group work").expect("should parse");
+        match cli.cmd {
+            Command::List { path, group } => {
+                assert_eq!(path, PathBuf::from("personal"));
+                assert_eq!(group.as_deref(), Some("work"));
+            }
             other => panic!("unexpected command: {other:?}"),
         }
     }

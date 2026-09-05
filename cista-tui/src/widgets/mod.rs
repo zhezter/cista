@@ -3,7 +3,7 @@ pub mod pills;
 pub mod banner;
 
 pub use status::draw_status;
-pub use pills::pills;
+pub use pills::{pills, pills_fit};
 pub use banner::draw_banner;
 
 use ratatui::layout::{Constraint, Direction, Layout, Rect};

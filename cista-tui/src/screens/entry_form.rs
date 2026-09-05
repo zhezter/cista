@@ -49,11 +49,12 @@ pub fn draw_entry_form(f: &mut Frame, app: &mut App) {
         ("Confirm password", masked_cf.as_str(), false),
         ("URL", app.entry_form.fields.url.as_str(), false),
         ("Notes", app.entry_form.fields.notes.as_str(), false),
+        ("Group", app.entry_form.fields.group.as_str(), false),
         ("Icon", icon_display.as_str(), true),
         ("Type", app.entry_form.fields.entry_type.label(), true),
     ];
 
-    // The eight fields may exceed the available height on short terminals, so
+    // The fields may exceed the available height on short terminals, so
     // scroll vertically keeping the active field visible.
     let field_area = chunks[1];
     let field_rows: u16 = fields.len() as u16 * 3;

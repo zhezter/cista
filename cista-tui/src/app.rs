@@ -147,6 +147,8 @@ pub struct EntryListState {
     pub search_query: String,
     pub in_search: bool,
     pub sort_mode: SortMode,
+    /// Active group filter (exact label). `None` shows every entry.
+    pub group_filter: Option<String>,
 }
 
 pub struct EntryDetailState {
@@ -235,6 +237,7 @@ pub struct EntryRow {
     pub favorite: bool,
     pub icon: String,
     pub entry_type: EntryType,
+    pub group: Option<String>,
     pub created_at: time::OffsetDateTime,
     pub updated_at: time::OffsetDateTime,
     pub health: cista_core::health::Health,
@@ -283,6 +286,56 @@ fn name_cmp(a: &EntryRow, b: &EntryRow) -> std::cmp::Ordering {
     a.name.to_lowercase().cmp(&b.name.to_lowercase())
 }
 
+/// Turns the form's group text into the optional stored label (empty string
+/// means "no group", mirroring the UiState setter semantics).
+fn opt_group(group: &str) -> Option<String> {
+    let trimmed = group.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+/// The OS command that opens a URL in the default browser.
+#[cfg(target_os = "macos")]
+fn open_command() -> &'static str {
+    "open"
+}
+
+#[cfg(target_os = "windows")]
+fn open_command() -> &'static str {
+    "cmd"
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn open_command() -> &'static str {
+    "xdg-open"
+}
+
+/// Spawns the platform default browser pointed at `url`, detaching it from the
+/// TUI process and silencing its output so it never pollutes the terminal.
+/// Returns an error if the command could not be started.
+#[cfg(target_os = "windows")]
+fn spawn_browser(url: &str) -> std::io::Result<std::process::Child> {
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", url])
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+}
+
+#[cfg(not(target_os = "windows"))]
+fn spawn_browser(url: &str) -> std::io::Result<std::process::Child> {
+    std::process::Command::new(open_command())
+        .arg(url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormMode {
     Add,
@@ -299,6 +352,7 @@ pub struct FormFields {
     pub notes: String,
     pub icon: String,
     pub entry_type: EntryType,
+    pub group: String,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -421,6 +475,7 @@ impl App {
                 search_query: String::new(),
                 in_search: false,
                 sort_mode: SortMode::NameAsc,
+                group_filter: None,
             },
             entry_detail: EntryDetailState {
                 entry_idx: None,
@@ -815,7 +870,8 @@ impl App {
                 3 => &mut self.entry_form.fields.password_confirm,
                 4 => &mut self.entry_form.fields.url,
                 5 => &mut self.entry_form.fields.notes,
-                6 => &mut self.entry_form.fields.icon,
+                6 => &mut self.entry_form.fields.group,
+                7 => &mut self.entry_form.fields.icon,
                 _ => &mut self.entry_form.fields.name,
             }),
             Screen::NewVault => Some(match self.new_vault.field_idx {
@@ -980,6 +1036,8 @@ impl App {
             Action::Dashboard => self.handle_dashboard(),
             Action::ChangePassword => self.handle_change_password(),
             Action::ToggleFavorite => self.handle_toggle_favorite(),
+            Action::OpenUrl => self.handle_open_url(),
+            Action::GroupFilter => self.handle_group_filter(),
             _ => AppSignal::Continue,
         }
     }
@@ -998,6 +1056,7 @@ impl App {
             Action::CopyUrl => self.handle_copy_url(),
             Action::Edit => self.handle_edit(),
             Action::Reveal => self.handle_reveal(),
+            Action::OpenUrl => self.handle_open_url(),
             _ => AppSignal::Continue,
         }
     }
@@ -1350,6 +1409,46 @@ impl App {
         AppSignal::Continue
     }
 
+    /// Cycle the active group filter ('g') across the distinct group labels in
+    /// the vault (sorted), finishing at "all entries". Filters the list by the
+    /// exact, case-insensitively-matched label.
+    fn handle_group_filter(&mut self) -> AppSignal {
+        if self.screen != Screen::EntryList {
+            return AppSignal::Continue;
+        }
+        let mut groups: Vec<&str> = self
+            .entry_list
+            .all_entries
+            .iter()
+            .filter_map(|e| e.group.as_deref())
+            .collect();
+        groups.sort();
+        groups.dedup();
+
+        if groups.is_empty() {
+            self.set_status("No groups defined yet. Set one in the entry form (Group field).");
+            return AppSignal::Continue;
+        }
+
+        let current = self.entry_list.group_filter.as_deref();
+        let next = match current {
+            None => groups[0],
+            Some(cur) => match groups.iter().position(|g| *g == cur) {
+                Some(i) if i + 1 < groups.len() => groups[i + 1],
+                _ => {
+                    self.entry_list.group_filter = None;
+                    self.set_status("Group filter: all entries");
+                    self.recompute_filtered_entries();
+                    return AppSignal::Continue;
+                }
+            },
+        };
+        self.entry_list.group_filter = Some(next.to_string());
+        self.set_status(&format!("Group filter: {next}"));
+        self.recompute_filtered_entries();
+        AppSignal::Continue
+    }
+
     /// Toggle the favourite flag on the selected entry ('f'). Updates the
     /// in-memory rows and the plaintext UI state, then persists metadata.
     fn handle_toggle_favorite(&mut self) -> AppSignal {
@@ -1488,8 +1587,8 @@ impl App {
                 }
             }
             Screen::EntryForm => match self.entry_form.field_idx {
-                6 => self.cycle_icon(),
-                7 => self.cycle_entry_type(),
+                7 => self.cycle_icon(),
+                8 => self.cycle_entry_type(),
                 _ => {
                     self.handle_tab_next();
                 }
@@ -1631,6 +1730,7 @@ impl App {
                     favorite: self.session.ui_state.is_favourite(entry.id()),
                     icon: self.session.ui_state.display_icon(entry.id()),
                     entry_type: self.session.ui_state.entry_type(entry.id()),
+                    group: self.session.ui_state.group(entry.id()).map(|s| s.to_string()),
                     created_at: entry.created_at(),
                     updated_at: entry.updated_at(),
                     health: healths[i].clone(),
@@ -1644,31 +1744,44 @@ impl App {
     /// current search filter and sort order. Never mutates `all_entries`, so
     /// clearing or shortening the query restores every entry.
     fn recompute_filtered_entries(&mut self) {
-        let mut entries: Vec<EntryRow> = if self.entry_list.search_query.is_empty() {
-            self.entry_list.all_entries.clone()
-        } else {
-            let q = self.entry_list.search_query.to_lowercase();
-            self.entry_list
-                .all_entries
-                .iter()
-                .filter(|e| {
-                    e.name.to_lowercase().contains(&q)
-                        || e.username
-                            .as_deref()
-                            .map(|u| u.to_lowercase().contains(&q))
-                            .unwrap_or(false)
-                        || e.url
-                            .as_deref()
-                            .map(|u| u.to_lowercase().contains(&q))
-                            .unwrap_or(false)
-                        || e.notes
-                            .as_deref()
-                            .map(|n| n.to_lowercase().contains(&q))
-                            .unwrap_or(false)
-                })
-                .cloned()
-                .collect()
-        };
+        let q = self.entry_list.search_query.to_lowercase();
+        let q = if q.is_empty() { None } else { Some(q) };
+        let group = self.entry_list.group_filter.clone();
+
+        let mut entries: Vec<EntryRow> = self
+            .entry_list
+            .all_entries
+            .iter()
+            .filter(|e| {
+                // Group filter (exact, case-insensitive match).
+                if let Some(g) = &group {
+                    if e.group.as_deref() != Some(g.as_str()) {
+                        return false;
+                    }
+                }
+                // Search filter across usual fields.
+                match &q {
+                    None => true,
+                    Some(q) => {
+                        let q = q.as_str();
+                        e.name.to_lowercase().contains(q)
+                            || e.username
+                                .as_deref()
+                                .map(|u| u.to_lowercase().contains(q))
+                                .unwrap_or(false)
+                            || e.url
+                                .as_deref()
+                                .map(|u| u.to_lowercase().contains(q))
+                                .unwrap_or(false)
+                            || e.notes
+                                .as_deref()
+                                .map(|n| n.to_lowercase().contains(q))
+                                .unwrap_or(false)
+                    }
+                }
+            })
+            .cloned()
+            .collect();
 
         // Favorites always come first; within each group the requested sort
         // order applies. `sort_by` is stable, so equal-category rows keep
@@ -1968,6 +2081,39 @@ impl App {
         AppSignal::Continue
     }
 
+    /// Opens the selected entry's URL in the system's default browser. Works
+    /// from both the entry list and the full entry detail screen. Fires the
+    /// browser in a standalone child so the TUI never blocks on it.
+    fn handle_open_url(&mut self) -> AppSignal {
+        let idx = match self.screen {
+            Screen::EntryDetail => self.entry_detail.entry_idx,
+            _ => self.get_selected_entry_idx(),
+        };
+        let Some(url) = idx
+            .and_then(|i| self.entry_list.entries.get(i).cloned())
+            .and_then(|e| e.url)
+        else {
+            self.set_error("Selected entry has no URL");
+            return AppSignal::Continue;
+        };
+
+        // Only treat http(s) as browser targets; other schemes (notes, local
+        // files) are rejected to avoid leaking data into unrelated handlers.
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            self.set_error("Entry URL is not an http(s) link");
+            return AppSignal::Continue;
+        }
+
+        match spawn_browser(&url) {
+            Ok(_) => self.set_status(&format!("Opening {url}")),
+            Err(e) => {
+                crate::log::log_error(&format!("open url: {e}"));
+                self.set_error("Could not open the default browser");
+            }
+        }
+        AppSignal::Continue
+    }
+
     /// Applies `f` to the currently selected entry. Works from both the entry
     /// list (selected/hovered row) and the entry detail screen, so a plain key
     /// can copy the password (or username/URL) of the row under the cursor
@@ -2022,6 +2168,12 @@ impl App {
                                     .unwrap_or("")
                                     .to_string(),
                                 entry_type: self.session.ui_state.entry_type(entry.id()),
+                                group: self
+                                    .session
+                                    .ui_state
+                                    .group(entry.id())
+                                    .unwrap_or("")
+                                    .to_string(),
                             };
                             self.entry_form.field_idx = 0;
                             self.previous_screen = Some(Screen::EntryDetail);
@@ -2052,7 +2204,7 @@ impl App {
     fn handle_tab_next(&mut self) -> AppSignal {
         match self.screen {
             Screen::EntryForm => {
-                self.entry_form.field_idx = (self.entry_form.field_idx + 1) % 8;
+                self.entry_form.field_idx = (self.entry_form.field_idx + 1) % 9;
             }
             Screen::NewVault => {
                 self.new_vault.field_idx = (self.new_vault.field_idx + 1) % 3;
@@ -2065,7 +2217,7 @@ impl App {
     fn handle_tab_prev(&mut self) -> AppSignal {
         match self.screen {
             Screen::EntryForm => {
-                self.entry_form.field_idx = (self.entry_form.field_idx + 7) % 8;
+                self.entry_form.field_idx = (self.entry_form.field_idx + 8) % 9;
             }
             Screen::NewVault => {
                 self.new_vault.field_idx = (self.new_vault.field_idx + 2) % 3;
@@ -2185,6 +2337,7 @@ impl App {
         let url = self.entry_form.fields.url.clone();
         let icon = self.entry_form.fields.icon.clone();
         let entry_type = self.entry_form.fields.entry_type;
+        let group = self.entry_form.fields.group.clone();
         let password_raw = std::mem::take(&mut self.entry_form.fields.password);
         let confirm_raw = std::mem::take(&mut self.entry_form.fields.password_confirm);
 
@@ -2244,6 +2397,7 @@ impl App {
                             vault.add_entry(e);
                             self.session.ui_state.set_entry_type(id, entry_type);
                             self.session.ui_state.set_icon(id, Some(icon.clone()));
+                            self.session.ui_state.set_group(id, opt_group(&group));
                             Ok(vault)
                         }
                         Err(err) => Err(err),
@@ -2274,6 +2428,7 @@ impl App {
                             });
                             self.session.ui_state.set_entry_type(entry_id, entry_type);
                             self.session.ui_state.set_icon(entry_id, Some(icon.clone()));
+                            self.session.ui_state.set_group(entry_id, opt_group(&group));
                             Ok(vault)
                         } else {
                             Err(anyhow::anyhow!("Entry not found"))
