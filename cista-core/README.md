@@ -1,6 +1,6 @@
 # cista-core
 
-Core library for [Cista](https://github.com/zhezter/cista), a local, encrypted password manager written in Rust. This crate provides the vault model, the `.cista` file format, the cryptographic primitives (Argon2id KDF and XChaCha20-Poly1305 AEAD), password generation, and health scoring — independent of any user interface.
+Core library for [Cista](https://github.com/zhezter/cista). This crate provides the vault model, the `.cista` file format, the cryptographic primitives, password generation, and health scoring independent of any user interface.
 
 ## Features
 
